@@ -30,10 +30,11 @@ jobs:
       - name: Install deps
         run: npm install --no-audit --no-fund
 
-      - name: Install playwright + chromium
+      - name: Install playwright (use runner's Chrome)
         run: |
           npm install --no-save playwright@1.56.0
-          npx playwright install --with-deps chromium || npx playwright install chromium
+          # Ubuntu runners ship Chrome stable; skip the CDN browser download
+          google-chrome --version || chromium-browser --version || true
 
       - name: Build
         run: npm run build
