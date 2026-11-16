@@ -22,13 +22,11 @@ export const metadata: Metadata = {
     description,
     type: "website",
     siteName: "UNFINISHED ∞",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "A painting no one will finish" }],
   },
   twitter: {
     card: "summary_large_image",
     title,
     description,
-    images: ["/og.png"],
   },
 };
 

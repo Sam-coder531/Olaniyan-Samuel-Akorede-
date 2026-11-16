@@ -535,8 +535,8 @@ export default function Studio() {
               The machine started a painting it <em>cannot finish</em>.
             </h1>
             <p>
-              It laid down <b>{machineLabel}</b> strokes in the dark — flowing, searching, going
-              nowhere in particular. It has no idea what it is making.{" "}
+              It laid down <b>{stats.machine ? machineLabel : "hundreds of"}</b> strokes in the
+              dark — flowing, searching, going nowhere in particular. It has no idea what it is making.{" "}
               <b>That part was left for you.</b>
             </p>
             <p>

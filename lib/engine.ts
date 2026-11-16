@@ -87,7 +87,9 @@ export class PaintingEngine {
     const rect = this.canvas.getBoundingClientRect();
     const W = Math.max(1, Math.round(rect.width));
     const H = Math.max(1, Math.round(rect.height));
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    // keep the backing store sane on very large / very dense displays
+    const maxPixels = 8.4e6; // ~4K
+    const dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(maxPixels / (W * H)));
 
     if (W === this.W && H === this.H && dpr === this.dpr) return;
 

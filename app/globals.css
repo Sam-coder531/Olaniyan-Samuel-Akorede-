@@ -72,6 +72,19 @@ button {
     radial-gradient(24% 26% at 78% 68%, rgba(55, 211, 174, 0.05), transparent 72%);
   filter: blur(28px);
   z-index: 0;
+  animation: breathe 22s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
 }
 
 .paper,
@@ -764,6 +777,10 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .paper {
     transition: none;
+  }
+
+  .stage::before {
+    animation: none;
   }
 
   .dot {
