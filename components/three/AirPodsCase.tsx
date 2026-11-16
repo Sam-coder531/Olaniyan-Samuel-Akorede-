@@ -144,11 +144,6 @@ export function AirPodsCase({
           <boxGeometry args={[0.86, 0.015, 0.26]} />
           <primitive object={mats.inner} attach="material" />
         </mesh>
-        {/* tiny seam shadow under the lid */}
-        <mesh position={[0, 0.005, 0.18]}>
-          <boxGeometry args={[1.02, 0.004, 0.38]} />
-          <primitive object={mats.dark} attach="material" />
-        </mesh>
       </group>
     </group>
   );
