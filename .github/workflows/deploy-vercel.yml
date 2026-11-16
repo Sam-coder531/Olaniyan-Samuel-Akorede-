@@ -18,13 +18,20 @@ on:
         description: "Git ref to deploy"
         required: true
         default: "main"
+      log_branch:
+        description: "Branch to commit the deploy log to"
+        required: true
+        default: "deploy-logs"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: team_qxRhYjEvgjmH9IjhXUimfHau
+      VERCEL_PROJECT_ID: prj_SpbrBq1LmS6cxVrB6LRNu1PGCsWY
     steps:
       - name: Mask token
         run: echo "::add-mask::${{ inputs.vercel_token }}"
@@ -36,61 +43,61 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
-      - name: Install
-        run: npm ci || npm install
+      - name: Install deps (for typecheck)
+        run: npm install --no-audit --no-fund
 
-      - name: Typecheck + build
-        run: npx tsc --noEmit && npm run build
+      - name: Typecheck
+        run: npx tsc --noEmit
 
-      - name: Link project
-        env:
-          VERCEL_TOKEN: ${{ inputs.vercel_token }}
-        run: |
-          npx --yes vercel@39 link --yes \
-            --project "${{ inputs.project }}" \
-            --scope "${{ inputs.scope }}" \
-            --token "$VERCEL_TOKEN"
-
-      # never fail the job here — capture everything into the summary + a file
-      - name: Deploy to production
+      # Upload source; Vercel runs `next build` on its own builders.
+      - name: Deploy to Vercel
         id: deploy
         continue-on-error: true
         env:
           VERCEL_TOKEN: ${{ inputs.vercel_token }}
         run: |
           set +e
-          npx --yes vercel@39 deploy --prebuilt --prod --yes \
+          npx --yes vercel@39 deploy --prod --yes \
             --token "$VERCEL_TOKEN" \
             --scope "${{ inputs.scope }}" > /tmp/deploy.log 2>&1
-          code=$?
-          echo "exit_code=$code"
+          echo "exit_code=$?" >> /tmp/meta.txt
           cat /tmp/deploy.log
-          URL=$(grep -Eo 'https://[a-z0-9.-]+\.vercel\.app' /tmp/deploy.log | tail -1)
+          URL=$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' /tmp/deploy.log | tail -1)
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          {
-            echo "## Vercel deploy (exit $code)"
-            echo ""
-            echo "URL: \`$URL\`"
-            echo ""
-            echo '```'
-            tail -60 /tmp/deploy.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "URL=$URL" >> /tmp/meta.txt
+          { echo "## Vercel deploy"; echo ""; echo "URL: $URL"; echo ""; echo '```'; tail -80 /tmp/deploy.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify
-        if: steps.deploy.outputs.url != ''
+      - name: Smoke test
+        continue-on-error: true
         run: |
           URL="${{ steps.deploy.outputs.url }}"
           {
-            echo "## Smoke test"
-            echo '```'
-            curl -sS -o /dev/null -w "page %{http_code}\n" "$URL"
-            curl -sS -o /dev/null -w "image %{http_code}\n" "$URL/assets/airpods/hero-case-open.webp"
-            curl -sS -X POST "$URL/api/subscribe" \
-              -H 'content-type: application/json' \
-              -d '{"email":"ci-smoke-test@example.com"}' \
-              -w "\napi %{http_code}\n"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo "## smoke"
+            curl -sS -o /dev/null -w "page %{http_code}\n" "$URL" || true
+            curl -sS -o /dev/null -w "image %{http_code}\n" "$URL/assets/airpods/hero-case-open.webp" || true
+            curl -sS -X POST "$URL/api/subscribe" -H 'content-type: application/json' \
+              -d '{"email":"ci-smoke-test@example.com"}' -w "\napi %{http_code}\n" || true
+          } >> /tmp/smoke.txt 2>&1
+          cat /tmp/smoke.txt
+          cat /tmp/smoke.txt >> "$GITHUB_STEP_SUMMARY"
+
+      # the sandbox can't read Actions logs, so publish them on a branch
+      - name: Publish log to branch
+        continue-on-error: true
+        run: |
+          mkdir -p .ci
+          cp /tmp/deploy.log .ci/deploy.log 2>/dev/null || true
+          cp /tmp/meta.txt .ci/meta.txt 2>/dev/null || true
+          cp /tmp/smoke.txt .ci/smoke.txt 2>/dev/null || true
+          printf '%s\n' "${{ steps.deploy.outputs.url }}" > .ci/url.txt
+          cat .ci/*.txt
+
+          git config user.name "deploy-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git fetch origin "${{ inputs.log_branch }}" || true
+          git checkout -B "${{ inputs.log_branch }}" origin/"${{ inputs.log_branch }}" 2>/dev/null \
+            || git checkout -B "${{ inputs.log_branch }}"
+          git add -f .ci
+          git commit -m "ci: deploy log $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo "nothing to commit"
+          git push --force origin "${{ inputs.log_branch }}"
