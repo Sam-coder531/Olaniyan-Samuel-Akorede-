@@ -1,0 +1,5 @@
+## smoke
+page 302
+image 302
+{"error":{"code":"401","message":"Protected deployment"},"message":"Protected by Vercel Authentication","access":"vercel curl <deployment-url>","protection":{"vercel_auth_enabled":true,"vercel_auth_callback":"https:\/\/vercel.com\/sso-api?url=https%3A%2F%2Fairpods-pro-film-441o1iazm-olasubomisamuelinfo-1816s-projects.vercel.app%2Fapi%2Fsubscribe&nonce=48796db09811f80c3b12deea58bcad742f74e4443eb1980ded29d7957cd02025","auto_vercel_auth_redirect":true,"password_enabled":false},"mcp":"With an authorized Vercel MCP connection (https:\/\/mcp.vercel.com), call web_fetch_vercel_url with url set to the full deployment URL."}
+api 401
