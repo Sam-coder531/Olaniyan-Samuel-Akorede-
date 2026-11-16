@@ -24,74 +24,84 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Resolve + download (never fails)
+      - name: Download with yt-dlp
         env:
           TARGET_URL: ${{ inputs.url }}
         run: |
-          mkdir -p downloads
-          exec 2>&1
           set -x
-          LOG=downloads/REPORT.txt
-          : > "$LOG"
+          python3 -m pip install --quiet --disable-pip-version-check -U yt-dlp
+          rm -rf media raw
+          mkdir -p media raw
 
-          echo "### yt-dlp attempt" | tee -a "$LOG"
-          python3 -m pip install --quiet --disable-pip-version-check -U yt-dlp curl_cffi >> "$LOG" 2>&1 || true
-          yt-dlp --version >> "$LOG" 2>&1 || true
-          yt-dlp --no-playlist --write-info-json --write-thumbnail \
-                 --merge-output-format mp4 -o "downloads/video.%(ext)s" \
-                 --print-json "$TARGET_URL" >> downloads/ytdlp.log 2>&1 || true
-          yt-dlp --no-playlist -f "bv*+ba/b" --merge-output-format mp4 \
-                 -o "downloads/video.%(ext)s" "$TARGET_URL" >> downloads/ytdlp.log 2>&1 || true
-          tail -40 downloads/ytdlp.log >> "$LOG" 2>&1 || true
+          ID=$(yt-dlp --no-warnings --get-id "$TARGET_URL")
+          SLUG=$(yt-dlp --no-warnings --get-id "$TARGET_URL" >/dev/null; echo "$TARGET_URL")
+          echo "ID=$ID"
+          echo "$ID" > raw/id.txt
 
-          echo "### resolver API attempt" | tee -a "$LOG"
-          for base in "https://tikwm.com" "https://www.tikwm.com"; do
-            curl -sS -L --max-time 60 -A "Mozilla/5.0" \
-              "$base/api/?url=${TARGET_URL}&hd=1" -o downloads/meta.json || true
-            head -c 800 downloads/meta.json >> "$LOG" 2>&1 || true
-            echo >> "$LOG"
-            if [ -s downloads/meta.json ] && grep -q '"play"' downloads/meta.json; then
-              cp downloads/meta.json downloads/meta_good.json
-              break
-            fi
-          done
+          yt-dlp --no-warnings --write-info-json --skip-download -o "raw/%(id)s.%(ext)s" "$TARGET_URL"
 
-          python3 - <<'PY' >> "$LOG" 2>&1 || true
-          import glob, json, os, subprocess, urllib.request
-          try:
-              data = None
-              if os.path.exists("downloads/meta_good.json"):
-                  data = json.load(open("downloads/meta_good.json")).get("data")
-              print("### parsing resolver data:", bool(data))
-              if data:
-                  print("DESC:", data.get("title"))
-                  print("AUTHOR: @%s" % (data.get("author") or {}).get("unique_id"))
-                  print("DURATION:", data.get("duration"))
-                  json.dump(data, open("downloads/metadata.json", "w"), indent=2)
-                  if not os.path.exists("downloads/video.mp4"):
-                      u = data.get("hdplay") or data.get("play") or ""
-                      if u.startswith("/"):
-                          u = "https://tikwm.com" + u
-                      req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
-                      with urllib.request.urlopen(req, timeout=180) as r, open("downloads/video.mp4", "wb") as fh:
-                          fh.write(r.read())
-                      print("saved downloads/video.mp4", os.path.getsize("downloads/video.mp4"))
-          except Exception as e:
-              print("resolver error:", repr(e))
-          try:
-              if os.path.exists("downloads/video.mp4"):
-                  subprocess.run(["ffmpeg", "-y", "-i", "downloads/video.mp4", "-vn",
-                                  "-acodec", "libmp3lame", "-q:a", "2", "downloads/audio.mp3"],
-                                 check=False, capture_output=True)
-                  subprocess.run(["ffprobe", "-v", "error", "-show_format", "-show_streams",
-                                  "downloads/video.mp4"], check=False,
-                                 stdout=open("downloads/ffprobe.txt", "w"), stderr=subprocess.STDOUT)
-          except Exception as e:
-              print("ffmpeg error:", repr(e))
-          PY
+          # browser-friendly H.264 mp4 (best avc1 video + best audio merged by yt-dlp)
+          yt-dlp --no-warnings -f "bv*[vcodec*=avc1]+ba/bv*[vcodec*=h264]+ba/b" \
+                 --merge-output-format mp4 --remux-video mp4 \
+                 -o "media/$ID.mp4" "$TARGET_URL" || \
+          yt-dlp --no-warnings -f "b" --remux-video mp4 -o "media/$ID.mp4" "$TARGET_URL"
 
-          ls -la downloads >> "$LOG" 2>&1 || true
+          # original audio track (tiktok serves an mp3 directly)
+          yt-dlp --no-warnings -f "audio" -o "media/$ID-audio.%(ext)s" "$TARGET_URL" || true
+
+          # cover image
+          curl -sS -L --max-time 60 -o "media/$ID-cover.jpg" \
+            "$(python3 -c "
+          import json,glob
+          f=sorted(glob.glob('raw/*.info.json'))[0]
+          d=json.load(open(f))
+          print(d.get('thumbnail') or '')
+          ")" || true
+
+          ls -la media raw
           exit 0
+
+      - name: Write summary
+        run: |
+          python3 - <<'PY'
+          import glob, json, os, datetime
+
+          f = sorted(glob.glob("raw/*.info.json"))[0]
+          d = json.load(open(f))
+          vid = d.get("id")
+          up = d.get("upload_date") or ""
+          try:
+              posted = datetime.date(int(up[:4]), int(up[4:6]), int(up[6:8])).isoformat()
+          except Exception:
+              posted = up
+
+          lines = [
+              "# TikTok download",
+              "",
+              "| field | value |",
+              "| --- | --- |",
+              "| Author | @%s |" % d.get("uploader"),
+              "| Video ID | %s |" % vid,
+              "| Caption | %s |" % (d.get("description") or "").replace("\n", " ").strip(),
+              "| Posted | %s |" % posted,
+              "| Duration | %ss |" % d.get("duration"),
+              "| Views | %s |" % d.get("view_count"),
+              "| Likes | %s |" % d.get("like_count"),
+              "| Comments | %s |" % d.get("comment_count"),
+              "| Shares | %s |" % d.get("repost_count"),
+              "| Saves | %s |" % d.get("save_count"),
+              "| Sound | %s |" % d.get("track"),
+              "| Page | %s |" % d.get("webpage_url"),
+              "",
+              "## Files",
+              "",
+          ]
+          for p in sorted(glob.glob("media/*")):
+              lines.append("- `%s` (%.1f KB)" % (p, os.path.getsize(p) / 1024))
+          lines += ["", "Downloaded %s UTC with yt-dlp." % datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")]
+          open("media/README.md", "w").write("\n".join(lines) + "\n")
+          print("\n".join(lines))
+          PY
 
       - name: Commit results to branch
         run: |
@@ -100,6 +110,7 @@ jobs:
           BRANCH="${{ inputs.target_branch }}"
           git fetch origin "$BRANCH"
           git checkout -f FETCH_HEAD
-          git add -f downloads
-          git commit -m "data: TikTok download for ${{ inputs.url }}" || echo "nothing to commit"
+          rm -rf downloads
+          git add -f media
+          git commit -m "data: add TikTok video @ $(date -u +%Y-%m-%d)" || echo "nothing to commit"
           git push origin HEAD:"$BRANCH"
