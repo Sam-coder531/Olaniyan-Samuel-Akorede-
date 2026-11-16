@@ -24,58 +24,61 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Resolve + download
+      - name: Resolve + download (never fails)
         env:
-          URL: ${{ inputs.url }}
+          TARGET_URL: ${{ inputs.url }}
         run: |
           mkdir -p downloads
-          set +e
-          curl -sS -L --max-time 90 -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)' \
-            "https://tikwm.com/api/?url=${URL}&hd=1" -o downloads/meta_tikwm.json
-          curl -sS -L --max-time 90 -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)' \
-            "https://www.tikwm.com/api/?url=${URL}&hd=1" -o downloads/meta_tikwm_www.json
-          ls -la downloads
-          for f in downloads/meta_*.json; do echo "=== $f"; head -c 1500 "$f"; echo; done
+          exec 2>&1
+          set -x
+          LOG=downloads/REPORT.txt
+          : > "$LOG"
 
-          python3 - <<'PY'
-          import json, os, glob, subprocess, urllib.request, traceback
+          echo "### yt-dlp attempt" | tee -a "$LOG"
+          python3 -m pip install --quiet --disable-pip-version-check -U yt-dlp curl_cffi >> "$LOG" 2>&1 || true
+          yt-dlp --version >> "$LOG" 2>&1 || true
+          yt-dlp --no-playlist --write-info-json --write-thumbnail \
+                 --merge-output-format mp4 -o "downloads/video.%(ext)s" \
+                 --print-json "$TARGET_URL" >> downloads/ytdlp.log 2>&1 || true
+          yt-dlp --no-playlist -f "bv*+ba/b" --merge-output-format mp4 \
+                 -o "downloads/video.%(ext)s" "$TARGET_URL" >> downloads/ytdlp.log 2>&1 || true
+          tail -40 downloads/ytdlp.log >> "$LOG" 2>&1 || true
 
-          data = None
-          for f in sorted(glob.glob("downloads/meta_*.json")):
-              try:
-                  j = json.load(open(f))
-              except Exception:
-                  continue
-              if isinstance(j, dict) and j.get("data"):
-                  data = j["data"]
-                  print("using", f)
-                  break
+          echo "### resolver API attempt" | tee -a "$LOG"
+          for base in "https://tikwm.com" "https://www.tikwm.com"; do
+            curl -sS -L --max-time 60 -A "Mozilla/5.0" \
+              "$base/api/?url=${TARGET_URL}&hd=1" -o downloads/meta.json || true
+            head -c 800 downloads/meta.json >> "$LOG" 2>&1 || true
+            echo >> "$LOG"
+            if [ -s downloads/meta.json ] && grep -q '"play"' downloads/meta.json; then
+              cp downloads/meta.json downloads/meta_good.json
+              break
+            fi
+          done
 
-          report = []
-          if not data:
-              report.append("NO DATA PARSED")
-          else:
-              report.append("DESC: %s" % data.get("title"))
-              report.append("AUTHOR: @%s" % (data.get("author") or {}).get("unique_id"))
-              report.append("DURATION: %s" % data.get("duration"))
-              report.append("MUSIC: %s" % (data.get("music_info") or {}).get("title"))
-              json.dump(data, open("downloads/metadata.json", "w"), indent=2)
-
-              def grab(url, dest):
-                  if not url:
-                      report.append("missing url for " + dest)
-                      return
-                  if url.startswith("/"):
-                      url = "https://tikwm.com" + url
-                  req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                  try:
-                      with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as fh:
+          python3 - <<'PY' >> "$LOG" 2>&1 || true
+          import glob, json, os, subprocess, urllib.request
+          try:
+              data = None
+              if os.path.exists("downloads/meta_good.json"):
+                  data = json.load(open("downloads/meta_good.json")).get("data")
+              print("### parsing resolver data:", bool(data))
+              if data:
+                  print("DESC:", data.get("title"))
+                  print("AUTHOR: @%s" % (data.get("author") or {}).get("unique_id"))
+                  print("DURATION:", data.get("duration"))
+                  json.dump(data, open("downloads/metadata.json", "w"), indent=2)
+                  if not os.path.exists("downloads/video.mp4"):
+                      u = data.get("hdplay") or data.get("play") or ""
+                      if u.startswith("/"):
+                          u = "https://tikwm.com" + u
+                      req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
+                      with urllib.request.urlopen(req, timeout=180) as r, open("downloads/video.mp4", "wb") as fh:
                           fh.write(r.read())
-                      report.append("saved %s (%d bytes)" % (dest, os.path.getsize(dest)))
-                  except Exception as e:
-                      report.append("FAILED %s: %r" % (dest, e))
-
-              grab(data.get("hdplay") or data.get("play"), "downloads/video.mp4")
+                      print("saved downloads/video.mp4", os.path.getsize("downloads/video.mp4"))
+          except Exception as e:
+              print("resolver error:", repr(e))
+          try:
               if os.path.exists("downloads/video.mp4"):
                   subprocess.run(["ffmpeg", "-y", "-i", "downloads/video.mp4", "-vn",
                                   "-acodec", "libmp3lame", "-q:a", "2", "downloads/audio.mp3"],
@@ -83,16 +86,17 @@ jobs:
                   subprocess.run(["ffprobe", "-v", "error", "-show_format", "-show_streams",
                                   "downloads/video.mp4"], check=False,
                                  stdout=open("downloads/ffprobe.txt", "w"), stderr=subprocess.STDOUT)
-
-          open("downloads/REPORT.txt", "w").write("\n".join(report) + "\n")
-          print("\n".join(report))
+          except Exception as e:
+              print("ffmpeg error:", repr(e))
           PY
+
+          ls -la downloads >> "$LOG" 2>&1 || true
+          exit 0
 
       - name: Commit results to branch
         run: |
           git config user.name "tiktok-fetch-bot"
           git config user.email "actions@users.noreply.github.com"
-          git stash list
           BRANCH="${{ inputs.target_branch }}"
           git fetch origin "$BRANCH"
           git checkout -f FETCH_HEAD
