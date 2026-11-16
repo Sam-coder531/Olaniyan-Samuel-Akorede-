@@ -188,34 +188,45 @@ export default function Studio() {
       // an empty room: the machine paints its opening before anybody arrives
       if (machines === 0 && allowIgnite) {
         setIgniting(true);
-        try {
+        const seed = async (count: number) => {
           // @ts-ignore — plain ESM generator, shared with the seeding script
           const { generateMachineStrokes, toSpec } = await import("@/lib/composition.mjs");
           // a SECURITY DEFINER function that paints only into an empty archive
-          await sb.rpc("paint_the_opening", { spec: toSpec(generateMachineStrokes(386)) });
+          const { error } = await sb.rpc("paint_the_opening", {
+            spec: toSpec(generateMachineStrokes(count)),
+          });
+          if (error) throw new Error(error.message);
+        };
+
+        try {
+          await seed(386);
         } catch {
-          // no archive: still give the visitor the painting, kept on this screen
+          // a smaller brush: retry with a lighter payload before giving up
           try {
-            // @ts-ignore — plain ESM generator
-            const { generateMachineStrokes } = await import("@/lib/composition.mjs");
-            const local = generateMachineStrokes(386).map((s: Record<string, unknown>, i: number) => ({
-              id: `local-${i}`,
-              color: s.color as string,
-              alpha: s.alpha as number,
-              width: s.width as number,
-              points: s.points as [number, number, number][],
-              source: "machine" as const,
-              createdAt: new Date(Date.now() - (386 - i) * 900000).toISOString(),
-            }));
-            engineRef.current?.setStrokes(local);
-            setStats((prev) => ({ ...prev, machine: local.length }));
-            setReady(true);
-            say("archive unreachable — this copy of the painting lives on your screen only");
+            await seed(150);
           } catch {
-            setReady(true);
+            try {
+              // @ts-ignore — plain ESM generator
+              const { generateMachineStrokes } = await import("@/lib/composition.mjs");
+              const local = generateMachineStrokes(386).map((s: Record<string, unknown>, i: number) => ({
+                id: `local-${i}`,
+                color: s.color as string,
+                alpha: s.alpha as number,
+                width: s.width as number,
+                points: s.points as [number, number, number][],
+                source: "machine" as const,
+                createdAt: new Date(Date.now() - (386 - i) * 900000).toISOString(),
+              }));
+              engineRef.current?.setStrokes(local);
+              setStats((prev) => ({ ...prev, machine: local.length }));
+              setReady(true);
+              say("archive unreachable — this copy of the painting lives on your screen only");
+            } catch {
+              setReady(true);
+            }
+            setIgniting(false);
+            return;
           }
-          setIgniting(false);
-          return;
         }
         if (alive) await load(false);
         return;
