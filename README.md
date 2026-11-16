@@ -1,6 +1,6 @@
 # UNFINISHED ∞
 
-**A painting that no one will ever finish.**
+**Live: [olaniyan-samuel-akorede.vercel.app](https://olaniyan-samuel-akorede.vercel.app)** · a painting that no one will ever finish.
 
 The machine starts the piece — 386 strokes it laid down over four days, flowing, searching, going nowhere in particular. It has no idea what it is making. Every visitor adds permanent ink on top of it, and everyone else in the room sees the marks arrive, live.
 
@@ -65,6 +65,25 @@ To paint locally instead:
 npm run seed          # 386 strokes, spread across four days
 node scripts/preview.mjs out.png 1200 630   # render the composition without a browser
 ```
+
+## Deploying
+
+The site is deployed to Vercel from this repository by `supabase/functions/ship-canvas`, a small
+Supabase Edge Function that reads the token from a Supabase secret and calls Vercel's deployment
+API (uploading the files, with `projectSettings` so the first deployment is accepted).
+
+```bash
+# redeploy the current branch
+curl "https://eporewwvgpfuzwmhpodv.supabase.co/functions/v1/ship-canvas?\
+key=$DEPLOY_KEY&action=deploy&sha=$(git rev-parse HEAD)"
+
+# check on it
+curl ".../ship-canvas?key=$DEPLOY_KEY&action=list"
+```
+
+It is gated by `VERCEL_DEPLOY_KEY` and can only build this repository into this project.
+`action=open` clears deployment protection; `action=verify` fetches the page, CSS, JS chunk and
+the generated social card to prove the deployment is really serving.
 
 ## Keys
 
