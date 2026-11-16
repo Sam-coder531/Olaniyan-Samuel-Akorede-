@@ -226,19 +226,14 @@ export default function Studio() {
         { event: "INSERT", schema: "public", table: "canvas_strokes" },
         (payload) => {
           const row = payload.new as StrokeRow;
-          if (!row || row.session_id === sessionRef.current) return;
+          // machine strokes only ever arrive in the opening; the load pass counts them
+          if (!row || row.source === "machine" || row.session_id === sessionRef.current) return;
           const stroke = toStroke(row);
           engineRef.current?.animateIn(stroke);
-          setStats((s) => ({
-            ...s,
-            humans: row.source === "human" ? s.humans + 1 : s.humans,
-            machine: row.source === "machine" ? s.machine + 1 : s.machine,
-          }));
+          setStats((s) => ({ ...s, humans: s.humans + 1 }));
           setStrokes((n) => n + 1);
-          if (row.source === "human") {
-            whisperIn("someone, somewhere, just left a mark.");
-            pluck(NOTES[Math.floor(Math.random() * NOTES.length)], 0.5);
-          }
+          whisperIn("someone, somewhere, just left a mark.");
+          pluck(NOTES[Math.floor(Math.random() * NOTES.length)], 0.5);
         },
       )
       .subscribe();
