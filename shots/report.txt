@@ -1,7 +1,7 @@
 LAUNCH failed via bundled: Error: browserType.launch: Executable doesn't exist at /home/runner/.cache/ms-playwright/chromium_headless_shell-1194/chrome-linux/headless_shell
 LAUNCH ok via channel:chrome
 WEBGL {"canvas":true,"w":1440,"h":900,"ctx":true,"renderer":"ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"}
-BUILD {"scene":"components/three/Scene.tsx:51cffddd components/three/AirPod.tsx:80ea1ac3 components/three/AirPodsCase.tsx:a9a20950","at":"2026-11-16T18:35:29.050Z"}
+BUILD {"scene":"components/three/Scene.tsx:72ea85e9 components/three/AirPod.tsx:80ea1ac3 components/three/AirPodsCase.tsx:8b299e87","at":"2026-11-16T18:39:36.044Z"}
 TITLE AirPods Pro — Silence, engineered.
 SCROLL HEIGHT 7200
 p000.png pct=000% visible=[]
