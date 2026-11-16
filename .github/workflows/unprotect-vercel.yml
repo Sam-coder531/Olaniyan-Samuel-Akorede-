@@ -1,0 +1,78 @@
+name: unprotect-vercel
+
+on:
+  workflow_dispatch:
+    inputs:
+      vercel_token:
+        description: "Vercel access token"
+        required: true
+      project:
+        description: "Vercel project name"
+        required: true
+        default: "airpods-pro-film"
+      scope:
+        description: "Vercel team slug"
+        required: true
+        default: "olasubomisamuelinfo-1816s-projects"
+      log_branch:
+        description: "Branch to publish the log to"
+        required: true
+        default: "deploy-logs"
+
+permissions:
+  contents: write
+
+jobs:
+  unprotect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mask token
+        run: echo "::add-mask::${{ inputs.vercel_token }}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Disable deployment protection
+        env:
+          VERCEL_TOKEN: ${{ inputs.vercel_token }}
+        run: |
+          set +e
+          {
+            echo "== project patch =="
+            curl -sS -X PATCH \
+              "https://api.vercel.com/v9/projects/${{ inputs.project }}?slug=${{ inputs.scope }}" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"ssoProtection":null,"passwordProtection":null}' \
+              -w "\nHTTP %{http_code}\n"
+            echo
+            echo "== team defaults =="
+            curl -sS "https://api.vercel.com/v1/teams/${{ inputs.scope }}?slug=${{ inputs.scope }}" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" -w "\nHTTP %{http_code}\n"
+          } > /tmp/out.txt 2>&1
+          cat /tmp/out.txt
+          echo "---" >> /tmp/out.txt
+
+      - name: Public URL check
+        run: |
+          set +e
+          URL="https://airpods-pro-film-9i87k0cmn-olasubomisamuelinfo-1816s-projects.vercel.app"
+          {
+            echo "== public check =="
+            curl -sS -o /tmp/page.html -w "page %{http_code}\n" -L "$URL"
+            curl -sS -o /dev/null -w "image %{http_code}\n" "$URL/assets/airpods/hero-case-open.webp"
+            head -c 300 /tmp/page.html
+          } >> /tmp/out.txt 2>&1
+          cat /tmp/out.txt
+
+      - name: Publish log
+        run: |
+          mkdir -p .ci
+          cp /tmp/out.txt .ci/unprotect.txt
+          git config user.name "deploy-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -B "${{ inputs.log_branch }}" origin/"${{ inputs.log_branch }}" 2>/dev/null || git checkout -B "${{ inputs.log_branch }}"
+          git add -f .ci
+          git commit -m "ci: unprotect log $(date -u +%H:%M:%SZ)" || echo "nothing"
+          git push --force origin "${{ inputs.log_branch }}"
