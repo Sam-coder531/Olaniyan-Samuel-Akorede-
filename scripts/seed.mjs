@@ -8,7 +8,7 @@
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { generateMachineStrokes } from "./composition.mjs";
+import { generateMachineStrokes } from "../lib/composition.mjs";
 
 const env = {};
 for (const line of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split("\n")) {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PaintingEngine } from "@/lib/engine";
-import { MACHINE_LIMIT, PALETTE, SIZES } from "@/lib/palette";
+import { PALETTE, SIZES } from "@/lib/palette";
 import { CONNECTED, supabase } from "@/lib/supabase";
 import { toStroke, type Stroke, type StrokeRow } from "@/lib/types";
 
@@ -189,7 +189,10 @@ export default function Studio() {
       if (machines === 0 && allowIgnite) {
         setIgniting(true);
         try {
-          await fetch("/api/ignite", { cache: "no-store" });
+          // @ts-ignore — plain ESM generator, shared with the seeding script
+          const { generateMachineStrokes, toSpec } = await import("@/lib/composition.mjs");
+          // a SECURITY DEFINER function that paints only into an empty archive
+          await sb.rpc("paint_the_opening", { spec: toSpec(generateMachineStrokes(386)) });
         } catch {
           /* the canvas simply starts empty */
         }

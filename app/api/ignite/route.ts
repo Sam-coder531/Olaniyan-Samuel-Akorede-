@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-// @ts-ignore — plain ESM generator, shared with scripts/seed.mjs so the artwork
+// @ts-ignore — plain ESM generator, shared with the seeding script so the artwork
 // is identical whether it is painted from CI, a laptop, or the deployed server.
-import { generateMachineStrokes } from "../../../scripts/composition.mjs";
+import { generateMachineStrokes } from "../../../lib/composition.mjs";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

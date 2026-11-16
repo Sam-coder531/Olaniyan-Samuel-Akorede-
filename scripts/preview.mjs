@@ -6,7 +6,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
-import { generateMachineStrokes } from "./composition.mjs";
+import { generateMachineStrokes } from "../lib/composition.mjs";
 
 const OUT = process.argv[2] || "preview.png";
 const W = Number(process.argv[3] || 1000);

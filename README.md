@@ -57,7 +57,9 @@ create table public.canvas_strokes (
 
 ### Let the machine paint
 
-`GET /api/ignite` seeds the opening if the archive holds no machine strokes — the client calls it automatically when it finds an empty canvas, so the piece is self-healing. To paint locally instead:
+The piece is self-healing. When a visitor finds an empty archive, the client generates the composition and hands it to `public.paint_the_opening(spec jsonb)` — a `SECURITY DEFINER` function that paints only into an empty archive and is the sole way `source = 'machine'` rows can ever be written (anon cannot insert them directly; RLS refuses it). `GET /api/ignite` does the same from the server when a service role key is present.
+
+To paint locally instead:
 
 ```bash
 npm run seed          # 386 strokes, spread across four days
