@@ -13,10 +13,40 @@ const say = (...a) => {
   log.push(s);
 };
 
-const browser = await chromium.launch({
-  args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"],
-});
+const ARGS = [
+  "--use-gl=angle",
+  "--use-angle=swiftshader",
+  "--enable-unsafe-swiftshader",
+  "--no-sandbox",
+  "--disable-dev-shm-usage",
+];
 
+async function launch() {
+  const attempts = [
+    ["bundled", () => chromium.launch({ args: ARGS })],
+    ["channel:chrome", () => chromium.launch({ channel: "chrome", args: ARGS })],
+    [
+      "system binary",
+      () =>
+        chromium.launch({
+          executablePath: "/usr/bin/google-chrome",
+          args: ARGS,
+        }),
+    ],
+  ];
+  for (const [label, fn] of attempts) {
+    try {
+      const b = await fn();
+      say("LAUNCH ok via " + label);
+      return b;
+    } catch (e) {
+      say("LAUNCH failed via " + label + ": " + String(e).split("\n")[0]);
+    }
+  }
+  throw new Error("no chromium available");
+}
+
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
 const errors = [];
@@ -26,12 +56,11 @@ page.on("console", (m) => {
 page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
 
 await page.goto(URL, { waitUntil: "networkidle", timeout: 60000 });
-await page.waitForTimeout(2500);
+await page.waitForTimeout(3000);
 
-// WebGL sanity
 const gl = await page.evaluate(() => {
   const c = document.querySelector(".canvasWrap canvas");
-  if (!c) return { canvas: false };
+  if (!c) return { canvas: false, html: document.querySelector(".canvasWrap")?.className };
   const ctx = c.getContext("webgl2") || c.getContext("webgl");
   return {
     canvas: true,
@@ -52,34 +81,30 @@ say("TITLE " + (await page.title()));
 await fs.mkdir(OUT, { recursive: true });
 
 const total = await page.evaluate(() => document.body.scrollHeight - innerHeight);
+say("SCROLL HEIGHT " + total);
 
 for (const p of STOPS) {
   const y = Math.round(total * p);
   await page.evaluate((yy) => window.scrollTo(0, yy), y);
-  // let springs + camera damping settle
-  await page.waitForTimeout(1400);
+  await page.waitForTimeout(1600);
   const name = `p${String(Math.round(p * 100)).padStart(3, "0")}.png`;
   await page.screenshot({ path: `${OUT}/${name}` });
 
-  // what's on screen right now
   const state = await page.evaluate(() => {
     const beats = [...document.querySelectorAll(".beat")].map((b) => {
-      const cs = getComputedStyle(b);
-      const o = parseFloat(cs.opacity);
-      const r = b.getBoundingClientRect();
+      const o = parseFloat(getComputedStyle(b).opacity);
       const txt = (b.querySelector("h1")?.innerText || "").replace(/\n/g, " / ");
-      return { txt, o: +o.toFixed(2), top: Math.round(r.top), h: Math.round(r.height) };
+      return { txt, o: +o.toFixed(2) };
     });
-    const vis = beats.filter((b) => b.o > 0.15);
     return {
       pct: document.querySelector(".pct")?.textContent,
-      visible: vis.map((b) => `${b.txt} (op=${b.o})`),
+      visible: beats.filter((b) => b.o > 0.15).map((b) => `${b.txt} (${b.o})`),
     };
   });
-  say(`${name} @${y}px  pct=${state.pct}  visible=[${state.visible.join(" | ")}]`);
+  say(`${name} pct=${state.pct} visible=[${state.visible.join(" | ")}]`);
 }
 
-// mobile pass
+/* mobile */
 const m = await browser.newPage({
   viewport: { width: 390, height: 844 },
   deviceScaleFactor: 2,
@@ -87,16 +112,18 @@ const m = await browser.newPage({
   hasTouch: true,
 });
 await m.goto(URL, { waitUntil: "networkidle", timeout: 60000 });
-await m.waitForTimeout(2000);
+await m.waitForTimeout(2500);
 const mTotal = await m.evaluate(() => document.body.scrollHeight - innerHeight);
 for (const p of [0, 0.35, 0.7, 0.97]) {
   await m.evaluate((yy) => window.scrollTo(0, yy), Math.round(mTotal * p));
-  await m.waitForTimeout(1200);
-  await m.screenshot({ path: `${OUT}/mobile-p${String(Math.round(p * 100)).padStart(3, "0")}.png` });
+  await m.waitForTimeout(1400);
+  await m.screenshot({
+    path: `${OUT}/mobile-p${String(Math.round(p * 100)).padStart(3, "0")}.png`,
+  });
 }
-say("mobile shots done");
+say("MOBILE shots done");
 
-say("ERRORS " + (errors.length ? JSON.stringify(errors.slice(0, 12), null, 1) : "none"));
+say("ERRORS " + (errors.length ? JSON.stringify(errors.slice(0, 10), null, 1) : "none"));
 
 await fs.writeFile(`${OUT}/report.txt`, log.join("\n") + "\n");
 await browser.close();
