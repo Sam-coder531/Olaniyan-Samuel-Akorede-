@@ -26,24 +26,24 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 type Stop = { at: number; pos: [number, number, number]; look: [number, number, number] };
 
 const STOPS: Stop[] = [
-  // 0.00 — wide, case open, product small
-  { at: 0.0, pos: [0, 0.35, 5.4], look: [0, 0.05, 0] },
-  // 0.12 — push in toward the buds
-  { at: 0.14, pos: [0.15, 0.55, 3.5], look: [0, 0.3, 0] },
-  // 0.24 — close on the pair, slight orbit
-  { at: 0.26, pos: [1.15, 0.75, 2.5], look: [0.1, 0.35, 0] },
-  // 0.36 — move to the exploded view, side-on
-  { at: 0.38, pos: [0.2, 0.6, 3.9], look: [0.35, 0.1, 0] },
-  // 0.50 — hold through the explode, drift right
-  { at: 0.52, pos: [1.0, 0.3, 3.4], look: [0.4, 0.0, 0] },
-  // 0.62 — pull back for ANC ring shot
-  { at: 0.64, pos: [-0.6, 0.5, 4.2], look: [0, 0.15, 0] },
-  // 0.74 — orbit around for spatial audio
-  { at: 0.76, pos: [1.4, 0.9, 3.0], look: [0, 0.3, 0] },
-  // 0.86 — low hero angle, case closed
-  { at: 0.88, pos: [-1.1, 0.15, 3.2], look: [0, 0.1, 0] },
-  // 1.00 — settle back to center, finale
-  { at: 1.0, pos: [0, 0.3, 4.4], look: [0, 0.15, 0] },
+  // opening — wide, whole product visible, case open
+  { at: 0.0, pos: [0, 0.5, 8.6], look: [0, 0.1, 0] },
+  // push in as the buds lift out
+  { at: 0.14, pos: [0.4, 0.65, 7.0], look: [0, 0.35, 0] },
+  // gentle orbit around the pair
+  { at: 0.26, pos: [2.1, 0.8, 6.2], look: [0, 0.4, 0] },
+  // swing to a side-on read for the explode
+  { at: 0.38, pos: [1.2, 0.5, 7.4], look: [0.15, 0.2, 0] },
+  // hold, drift right so the parts fan across frame
+  { at: 0.52, pos: [2.0, 0.35, 7.2], look: [0.2, 0.15, 0] },
+  // pull back and left for the ANC ring shot
+  { at: 0.64, pos: [-1.1, 0.7, 8.0], look: [0, 0.2, 0] },
+  // orbit for spatial audio
+  { at: 0.76, pos: [2.4, 1.1, 6.4], look: [0, 0.3, 0] },
+  // low angle as the lid closes
+  { at: 0.88, pos: [-1.7, 0.2, 6.8], look: [0, 0.05, 0] },
+  // settle centre for the finale
+  { at: 1.0, pos: [0, 0.45, 7.6], look: [0, 0.15, 0] },
 ];
 
 function cameraAt(p: number) {
@@ -141,12 +141,12 @@ function Content({ progress }: { progress: MotionValue<number> }) {
     if (!buds.current) return;
     const p = progress.get();
     // buds lift out of the case at the start and return at the end
-    const out = smooth(seg(p, 0.04, 0.16)) * (1 - smooth(seg(p, 0.9, 1.0)));
-    buds.current.position.y = lerp(-0.55, 0.55, out);
-    buds.current.rotation.y = lerp(0, 0.35, out);
-    const sc = lerp(0.75, 1, out);
-    buds.current.scale.setScalar(sc);
-    buds.current.visible = out > 0.02;
+    const out = smooth(seg(p, 0.03, 0.15)) * (1 - smooth(seg(p, 0.9, 0.99)));
+    buds.current.position.y = lerp(-0.78, 0.26, out);
+    buds.current.position.z = lerp(0, 0.12, out);
+    buds.current.rotation.y = lerp(0, 0.3, out);
+    buds.current.scale.setScalar(lerp(0.62, 0.82, out));
+    buds.current.visible = out > 0.015;
   });
 
   return (
@@ -183,15 +183,20 @@ function Content({ progress }: { progress: MotionValue<number> }) {
         />
       </Environment>
 
-      <ambientLight intensity={0.25} />
+      <ambientLight intensity={0.22} />
       <directionalLight
-        position={[3, 6, 4]}
-        intensity={2.2}
+        position={[3, 7, 5]}
+        intensity={2.6}
         castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-bias={-0.0005}
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0004}
+        shadow-camera-left={-6}
+        shadow-camera-right={6}
+        shadow-camera-top={6}
+        shadow-camera-bottom={-6}
       />
-      <directionalLight position={[-4, 2, -3]} intensity={0.7} color="#9fc4ff" />
+      <directionalLight position={[-5, 3, -4]} intensity={0.85} color="#9fc4ff" />
+      <pointLight position={[0, -2, 3]} intensity={6} color="#7dd3fc" distance={9} />
 
       {/* the case, always present */}
       <AirPodsCase progress={progress} position={[0, -0.05, 0]} rotation={[0, 0, 0]} />
@@ -201,18 +206,20 @@ function Content({ progress }: { progress: MotionValue<number> }) {
         <Float speed={1.1} rotationIntensity={0.22} floatIntensity={0.32}>
           <AirPod
             progress={progress}
-            position={[-0.17, 0.02, 0.05]}
-            rotation={[0.12, -0.35, 0.14]}
+            position={[-0.2, 0.0, 0.04]}
+            rotation={[0.1, -0.62, 0.12]}
             explode={[0.4, 0.56]}
+            finish={0}
           />
         </Float>
         <Float speed={0.9} rotationIntensity={0.18} floatIntensity={0.28}>
           <AirPod
             progress={progress}
-            position={[0.19, 0.06, -0.02]}
-            rotation={[0.1, 0.5, -0.12]}
-            scale={0.98}
+            position={[0.22, 0.05, -0.02]}
+            rotation={[0.08, 0.72, -0.1]}
+            scale={0.97}
             explode={[0.4, 0.56]}
+            finish={0}
           />
         </Float>
       </group>
@@ -220,7 +227,7 @@ function Content({ progress }: { progress: MotionValue<number> }) {
       <SoundRings progress={progress} />
 
       <ContactShadows
-        position={[0, -0.42, 0]}
+        position={[0, -0.56, 0]}
         opacity={0.55}
         scale={12}
         blur={2.6}
@@ -238,7 +245,7 @@ export default function Scene({ progress }: { progress: MotionValue<number> }) {
       shadows
       dpr={[1, 1.8]}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-      camera={{ position: [0, 0.35, 5.4], fov: 38, near: 0.1, far: 60 }}
+      camera={{ position: [0, 0.5, 8.6], fov: 34, near: 0.1, far: 80 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.15;
