@@ -45,9 +45,9 @@ const STOPS: Stop[] = [
   S(0.26, [0, 0.62, 4.15], [0.56, 0.42, 0]),
   // "look closer" — dead centre
   S(0.36, [0, 0.46, 4.0], [0, 0.3, 0]),
-  // explode — parts fan out to the right, copy stays left
-  S(0.46, [0.1, 0.36, 4.65], [-0.42, 0.16, 0]),
-  S(0.56, [0.15, 0.3, 4.55], [-0.44, 0.12, 0]),
+  // explode — pull back + aim higher so the fans of parts have room
+  S(0.46, [0.1, 0.62, 5.85], [-0.4, 0.46, 0]),
+  S(0.56, [0.15, 0.6, 5.75], [-0.42, 0.44, 0]),
   // ANC — copy left, rings around the product right of centre
   S(0.66, [-0.05, 0.52, 4.7], [-0.5, 0.26, 0]),
   // transparency — copy right

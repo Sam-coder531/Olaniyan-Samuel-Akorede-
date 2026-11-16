@@ -138,10 +138,11 @@ function BeatLayer({
   const isFinale = beat.id === "finale";
 
   return (
-    <motion.div
-      className={`beat beat--${beat.place} beat--${beat.size ?? "big"}`}
-      style={{ opacity, y, filter, pointerEvents: isFinale ? "auto" : "none" }}
-    >
+    <div className={`beat beat--${beat.place} beat--${beat.size ?? "big"}`}>
+      <motion.div
+        className="beat__motion"
+        style={{ opacity, y, filter, pointerEvents: isFinale ? "auto" : "none" }}
+      >
       <div className="beat__inner">
         {beat.eyebrow && <p className="eyebrow">{beat.eyebrow}</p>}
         <h1 className={beat.size === "hero" ? "h-hero" : "h-big"}>
@@ -179,7 +180,8 @@ function BeatLayer({
         )}
         {isFinale && <SubscribeForm />}
       </div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }
 

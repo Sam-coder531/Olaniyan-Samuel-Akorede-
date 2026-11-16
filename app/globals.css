@@ -113,6 +113,12 @@ body {
   width: min(90vw, 800px);
 }
 
+/* Motion sets an inline transform (y/opacity), so it must not fight the
+   positioning transform on .beat — only ever animate this inner node. */
+.beat__motion {
+  will-change: transform, opacity, filter;
+}
+
 .beat--center .beat__inner {
   margin-inline: auto;
 }
