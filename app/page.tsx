@@ -1,9 +1,9 @@
-import AirPodsFilm from "@/components/AirPodsFilm";
+import Film from "@/components/Film";
 
 export default function Page() {
   return (
     <main>
-      <AirPodsFilm />
+      <Film />
     </main>
   );
 }
