@@ -9,7 +9,7 @@ import { toStroke, type Stroke, type StrokeRow } from "@/lib/types";
 const LOAD_LIMIT = 1800;
 const NOTES = [293.66, 349.23, 392.0, 440.0, 493.88, 587.33, 659.25];
 
-type Stats = { machine: number; humans: number };
+type Stats = { machine: number; humans: number; begun: string | null };
 
 type ReplayState = {
   on: boolean;
@@ -51,7 +51,7 @@ export default function Studio() {
 
   const [ready, setReady] = useState(false);
   const [intro, setIntro] = useState(true);
-  const [stats, setStats] = useState<Stats>({ machine: 0, humans: 0 });
+  const [stats, setStats] = useState<Stats>({ machine: 0, humans: 0, begun: null });
   const [painters, setPainters] = useState(1);
   const [ink, setInk] = useState(0);
   const [size, setSize] = useState(1);
@@ -61,6 +61,7 @@ export default function Studio() {
   const [whisper, setWhisper] = useState<string | null>(null);
   const [strokes, setStrokes] = useState(0);
   const [igniting, setIgniting] = useState(false);
+  const [mine, setMine] = useState(0);
 
   const inkHex = PALETTE[ink].hex;
   const width = SIZES[size].width;
@@ -168,7 +169,8 @@ export default function Studio() {
     let presence: ReturnType<typeof sb.channel> | null = null;
 
     const load = async (allowIgnite = true) => {
-      const [{ data }, machineCount, humanCount] = await Promise.all([
+      try {
+      const [{ data }, machineCount, humanCount, firstMark] = await Promise.all([
         sb
           .from("canvas_strokes")
           .select("id, created_at, session_id, source, color, alpha, width, points")
@@ -176,6 +178,7 @@ export default function Studio() {
           .limit(LOAD_LIMIT),
         sb.from("canvas_strokes").select("id", { count: "exact", head: true }).eq("source", "machine"),
         sb.from("canvas_strokes").select("id", { count: "exact", head: true }).eq("source", "human"),
+        sb.from("canvas_strokes").select("created_at").order("created_at", { ascending: true }).limit(1),
       ]);
 
       if (!alive) return;
@@ -198,9 +201,17 @@ export default function Studio() {
       const loaded = rows.map(toStroke).reverse();
       engineRef.current?.setStrokes(loaded);
       setStrokes(loaded.length);
-      setStats({ machine: machines, humans: humanCount.count ?? 0 });
+      setStats({
+        machine: machines,
+        humans: humanCount.count ?? 0,
+        begun: (firstMark.data?.[0] as { created_at?: string } | undefined)?.created_at ?? null,
+      });
       setIgniting(false);
       setReady(true);
+      } catch {
+        setReady(true);
+        setIgniting(false);
+      }
     };
 
     void load();
@@ -265,6 +276,7 @@ export default function Studio() {
       };
       engine.commit(optimistic);
       setStrokes((n) => n + 1);
+      setMine((n) => n + 1);
       setStats((s) => ({ ...s, humans: s.humans + 1 }));
       pluck(NOTES[ink], 0.8);
 
@@ -419,6 +431,15 @@ export default function Studio() {
     return () => window.removeEventListener("keydown", onKey);
   }, [replay.on, intro, openReplay, closeReplay, toggleSound, pluck]);
 
+  const autoReplay = useRef(false);
+  useEffect(() => {
+    if (!ready || autoReplay.current) return;
+    if (window.location.hash === "#replay" && engineRef.current?.replayState.total) {
+      autoReplay.current = true;
+      openReplay();
+    }
+  }, [ready, openReplay]);
+
   const machineLabel = useMemo(() => (stats.machine ? fmt(stats.machine) : "—"), [stats.machine]);
 
   return (
@@ -473,8 +494,19 @@ export default function Studio() {
                 humans <b>{fmt(stats.humans)}</b>
               </span>
               <span>
-                strokes loaded <b>{fmt(strokes)}</b>
+                your marks <b>{fmt(mine)}</b>
               </span>
+              {stats.begun && (
+                <span>
+                  begun{" "}
+                  <b>
+                    {new Date(stats.begun).toLocaleDateString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </b>
+                </span>
+              )}
               {!CONNECTED && <span style={{ color: "var(--vermilion)" }}>offline · local ink</span>}
             </div>
 
@@ -540,8 +572,17 @@ export default function Studio() {
               <b>That part was left for you.</b>
             </p>
             <p>
-              Everything you draw here is kept forever, and appears — live — on the screens of
-              everyone else in this room. Nothing is ever erased. Nothing is ever finished.
+              {stats.humans === 0 ? (
+                <>No human has touched it yet. You would be the first.</>
+              ) : (
+                <>
+                  <b>{fmt(stats.humans)}</b> human{" "}
+                  {stats.humans === 1 ? "mark has" : "marks have"} joined it so far. Everything you
+                  draw is kept forever and appears — live — on the screens of everyone else in this
+                  room.
+                </>
+              )}{" "}
+              Nothing is ever erased. Nothing is ever finished.
             </p>
             <button className="cta" type="button" onClick={() => setIntro(false)}>
               add a stroke <span aria-hidden="true">→</span>
