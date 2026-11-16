@@ -58,7 +58,7 @@ jobs:
           VERCEL_TOKEN: ${{ inputs.vercel_token }}
         run: |
           set +e
-          npx --yes vercel@39 deploy --prod --yes \
+          npx --yes vercel@latest deploy --prod --yes \
             --token "$VERCEL_TOKEN" \
             --scope "${{ inputs.scope }}" > /tmp/deploy.log 2>&1
           echo "exit_code=$?" >> /tmp/meta.txt
