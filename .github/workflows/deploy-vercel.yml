@@ -1,0 +1,79 @@
+name: deploy-vercel
+
+on:
+  workflow_dispatch:
+    inputs:
+      vercel_token:
+        description: "Vercel access token"
+        required: true
+      project:
+        description: "Vercel project name"
+        required: true
+        default: "airpods-pro-film"
+      scope:
+        description: "Vercel team slug"
+        required: true
+        default: "olasubomisamuelinfo-1816s-projects"
+      ref:
+        description: "Git ref to deploy"
+        required: true
+        default: "main"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mask token
+        run: echo "::add-mask::${{ inputs.vercel_token }}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Typecheck + build
+        run: npx tsc --noEmit && npm run build
+
+      - name: Link project
+        env:
+          VERCEL_TOKEN: ${{ inputs.vercel_token }}
+        run: |
+          npx --yes vercel@39 link \
+            --yes \
+            --project "${{ inputs.project }}" \
+            --scope "${{ inputs.scope }}" \
+            --token "$VERCEL_TOKEN"
+
+      - name: Deploy to production
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ inputs.vercel_token }}
+        run: |
+          set -o pipefail
+          URL=$(npx --yes vercel@39 deploy --prebuilt --prod --yes \
+                  --token "$VERCEL_TOKEN" \
+                  --scope "${{ inputs.scope }}" 2>&1 | tee /tmp/out.txt | tail -1)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "### Deployed: $URL" >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/out.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test
+        run: |
+          URL="${{ steps.deploy.outputs.url }}"
+          echo "checking $URL"
+          curl -sS -o /dev/null -w "page %{http_code}\n" "$URL"
+          curl -sS -o /dev/null -w "image %{http_code}\n" "$URL/assets/airpods/hero-case-open.webp"
+          curl -sS -X POST "$URL/api/subscribe" \
+            -H 'content-type: application/json' \
+            -d '{"email":"ci-smoke-test@example.com"}' \
+            -w "\napi %{http_code}\n"
