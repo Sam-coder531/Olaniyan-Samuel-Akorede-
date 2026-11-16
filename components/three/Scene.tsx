@@ -26,24 +26,25 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 type Stop = { at: number; pos: [number, number, number]; look: [number, number, number] };
 
 const STOPS: Stop[] = [
-  // opening — wide, whole product visible, case open
-  { at: 0.0, pos: [0, 0.5, 8.6], look: [0, 0.1, 0] },
-  // push in as the buds lift out
-  { at: 0.14, pos: [0.4, 0.65, 7.0], look: [0, 0.35, 0] },
-  // gentle orbit around the pair
-  { at: 0.26, pos: [2.1, 0.8, 6.2], look: [0, 0.4, 0] },
-  // swing to a side-on read for the explode
-  { at: 0.38, pos: [1.2, 0.5, 7.4], look: [0.15, 0.2, 0] },
-  // hold, drift right so the parts fan across frame
-  { at: 0.52, pos: [2.0, 0.35, 7.2], look: [0.2, 0.15, 0] },
-  // pull back and left for the ANC ring shot
-  { at: 0.64, pos: [-1.1, 0.7, 8.0], look: [0, 0.2, 0] },
-  // orbit for spatial audio
-  { at: 0.76, pos: [2.4, 1.1, 6.4], look: [0, 0.3, 0] },
-  // low angle as the lid closes
-  { at: 0.88, pos: [-1.7, 0.2, 6.8], look: [0, 0.05, 0] },
-  // settle centre for the finale
-  { at: 1.0, pos: [0, 0.45, 7.6], look: [0, 0.15, 0] },
+  //        progress      x      y     z                 x     y    z
+  // opening: product sits right of frame, text on the left
+  { at: 0.0, pos: [0.75, 0.45, 4.9], look: [0.75, 0.28, 0] },
+  { at: 0.14, pos: [0.8, 0.5, 4.3], look: [0.8, 0.42, 0] },
+  // product swings to the left so the right-hand copy has room
+  { at: 0.26, pos: [-0.95, 0.55, 3.9], look: [-0.95, 0.4, 0] },
+  // centre for the "look closer" beat
+  { at: 0.36, pos: [0, 0.45, 3.7], look: [0, 0.3, 0] },
+  // exploded: pushed right, wide enough to see the parts fan out
+  { at: 0.46, pos: [0.85, 0.35, 4.4], look: [0.85, 0.2, 0] },
+  { at: 0.56, pos: [1.0, 0.3, 4.2], look: [1.0, 0.15, 0] },
+  // ANC: left, rings visible
+  { at: 0.66, pos: [-0.9, 0.5, 4.5], look: [-0.9, 0.3, 0] },
+  // transparency: right
+  { at: 0.76, pos: [0.95, 0.5, 4.1], look: [0.95, 0.3, 0] },
+  // spatial: centre-ish, orbiting
+  { at: 0.86, pos: [-0.4, 0.35, 4.0], look: [-0.4, 0.25, 0] },
+  // finale: dead centre, lid closed
+  { at: 1.0, pos: [0, 0.4, 4.6], look: [0, 0.25, 0] },
 ];
 
 function cameraAt(p: number) {
@@ -142,10 +143,10 @@ function Content({ progress }: { progress: MotionValue<number> }) {
     const p = progress.get();
     // buds lift out of the case at the start and return at the end
     const out = smooth(seg(p, 0.03, 0.15)) * (1 - smooth(seg(p, 0.9, 0.99)));
-    buds.current.position.y = lerp(-0.78, 0.26, out);
-    buds.current.position.z = lerp(0, 0.12, out);
-    buds.current.rotation.y = lerp(0, 0.3, out);
-    buds.current.scale.setScalar(lerp(0.62, 0.82, out));
+    buds.current.position.y = lerp(-0.24, 0.62, out);
+    buds.current.position.z = lerp(0, 0.1, out);
+    buds.current.rotation.y = lerp(0, 0.28, out);
+    buds.current.scale.setScalar(lerp(0.7, 0.95, out));
     buds.current.visible = out > 0.015;
   });
 
@@ -245,7 +246,7 @@ export default function Scene({ progress }: { progress: MotionValue<number> }) {
       shadows
       dpr={[1, 1.8]}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-      camera={{ position: [0, 0.5, 8.6], fov: 34, near: 0.1, far: 80 }}
+      camera={{ position: [0.75, 0.45, 4.9], fov: 34, near: 0.1, far: 80 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.15;
