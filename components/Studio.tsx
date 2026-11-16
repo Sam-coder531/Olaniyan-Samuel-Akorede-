@@ -194,7 +194,28 @@ export default function Studio() {
           // a SECURITY DEFINER function that paints only into an empty archive
           await sb.rpc("paint_the_opening", { spec: toSpec(generateMachineStrokes(386)) });
         } catch {
-          /* the canvas simply starts empty */
+          // no archive: still give the visitor the painting, kept on this screen
+          try {
+            // @ts-ignore — plain ESM generator
+            const { generateMachineStrokes } = await import("@/lib/composition.mjs");
+            const local = generateMachineStrokes(386).map((s: Record<string, unknown>, i: number) => ({
+              id: `local-${i}`,
+              color: s.color as string,
+              alpha: s.alpha as number,
+              width: s.width as number,
+              points: s.points as [number, number, number][],
+              source: "machine" as const,
+              createdAt: new Date(Date.now() - (386 - i) * 900000).toISOString(),
+            }));
+            engineRef.current?.setStrokes(local);
+            setStats((prev) => ({ ...prev, machine: local.length }));
+            setReady(true);
+            say("archive unreachable — this copy of the painting lives on your screen only");
+          } catch {
+            setReady(true);
+          }
+          setIgniting(false);
+          return;
         }
         if (alive) await load(false);
         return;
