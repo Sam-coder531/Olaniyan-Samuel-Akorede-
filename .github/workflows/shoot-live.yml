@@ -1,0 +1,54 @@
+name: shoot-live
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Live URL to photograph"
+        required: true
+        default: "https://airpods-pro-film.vercel.app"
+      artifact_branch:
+        description: "Branch to publish screenshots to"
+        required: true
+        default: "visual-check"
+
+permissions:
+  contents: write
+
+jobs:
+  shoot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Playwright (runner Chrome, no CDN download)
+        run: |
+          npm install --no-save playwright@1.56.0
+          google-chrome --version || true
+
+      - name: Shoot the live site
+        run: node scripts/shoot.mjs
+        env:
+          TARGET_URL: ${{ inputs.url }}
+
+      - name: Publish
+        if: always()
+        run: |
+          cat shots/report.txt || true
+          rm -rf /tmp/fresh && mkdir -p /tmp/fresh
+          cp -r shots/. /tmp/fresh/ 2>/dev/null || true
+          git config user.name "visual-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git fetch origin "${{ inputs.artifact_branch }}" || true
+          rm -rf shots
+          git checkout -B "${{ inputs.artifact_branch }}" origin/"${{ inputs.artifact_branch }}" 2>/dev/null || git checkout -B "${{ inputs.artifact_branch }}"
+          rm -rf shots && mkdir -p shots && cp -r /tmp/fresh/. shots/
+          git add -f shots
+          git commit -m "live shots: $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo nothing
+          git push --force origin "${{ inputs.artifact_branch }}"
