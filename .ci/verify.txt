@@ -1,0 +1,26 @@
+== page ==
+HTTP 200  18041 bytes
+<title>AirPods Pro — Silence, engineered.</title>
+og:image" content="https://airpods.example.com/assets/airpods/hero-case-open.webp"
+
+== images ==
+hero-case-open       HTTP 200  16502B  image/webp
+hero-buds-pair       HTTP 200  17444B  image/webp
+macro-detail         HTTP 200  42304B  image/webp
+exploded-ebud        HTTP 200  45382B  image/webp
+anc-waves            HTTP 200  101344B  image/webp
+transparency-mode    HTTP 200  130004B  image/webp
+spatial-audio        HTTP 200  73148B  image/webp
+case-closed-black    HTTP 200  22782B  image/webp
+colors-lineup        HTTP 200  24832B  image/webp
+charging-desk        HTTP 200  51262B  image/webp
+
+== api: valid email ==
+{"ok":true,"stored":true}
+HTTP 200
+
+== api: invalid email ==
+{"ok":false,"error":"That email doesn't look right."}
+HTTP 422
+
+== css/js bundle ==
