@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+:root {
+  --bg-desk: #eae5db;
+  --bg-chassis: #f7f4ed;
+  --bg-bay: #ede8de;
+  --bg-keycap: #fcfbf8;
+  --bg-oled: #111312;
+  --border-chassis: #cfc8b8;
+  --border-subtle: #ded8ca;
+  --ink-primary: #181715;
+  --ink-secondary: #59544b;
+  --ink-muted: #867f73;
+  --accent: #ff4f1f;
+  --accent-deep: #d93c10;
+  --phosphor-green: #22c55e;
+  --font-sans: "Space Grotesk Variable", "Space Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--bg-desk);
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle architectural studio desk grain */
+.studio-desk {
+  background-color: var(--bg-desk);
+  background-image: radial-gradient(rgba(24, 23, 21, 0.085) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Machined anodized aluminum hardware chassis */
+.hardware-chassis {
+  background: linear-gradient(180deg, #faf8f2 0%, #f3efe5 100%);
+  border: 1px solid var(--border-chassis);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 -2px 0 rgba(175, 166, 148, 0.35) inset,
+    0 20px 45px -20px rgba(24, 23, 21, 0.22),
+    0 4px 12px -2px rgba(24, 23, 21, 0.08);
+}
+
+/* Recessed aluminum module bay */
+.hardware-bay {
+  background-color: var(--bg-bay);
+  border: 1px solid #d8d1c2;
+  box-shadow:
+    0 1px 2px rgba(24, 23, 21, 0.05) inset,
+    0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+/* Recessed matte-glass OLED screen */
+.oled-screen {
+  background: radial-gradient(120% 100% at 50% 0%, #191d1b 0%, #0e100f 75%);
+  border: 1px solid #2a2d2b;
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.55) inset,
+    0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* Tactile physical button keycap */
+.hw-key {
+  background: linear-gradient(180deg, #ffffff 0%, #f5f1e8 100%);
+  border: 1px solid #cfc8b8;
+  box-shadow:
+    0 2px 0 #c9c1b0,
+    0 3px 5px rgba(24, 23, 21, 0.07);
+  transition:
+    transform 80ms ease,
+    box-shadow 80ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.hw-key:hover {
+  border-color: #b4ac9a;
+}
+
+.hw-key:active,
+.hw-key[data-pressed="true"] {
+  transform: translateY(1.5px);
+  box-shadow:
+    0 0.5px 0 #c9c1b0,
+    0 1px 2px rgba(24, 23, 21, 0.06);
+}
+
+/* Primary Braun/OP-1 vermilion transport key */
+.hw-key-orange {
+  background: linear-gradient(180deg, #ff6136 0%, #f24616 100%);
+  border: 1px solid #c9340b;
+  color: #ffffff;
+  box-shadow:
+    0 2px 0 #b32d08,
+    0 4px 10px rgba(255, 79, 31, 0.26);
+  transition:
+    transform 80ms ease,
+    box-shadow 80ms ease,
+    filter 120ms ease;
+}
+
+.hw-key-orange:hover {
+  filter: brightness(1.04);
+}
+
+.hw-key-orange:active {
+  transform: translateY(1.5px);
+  box-shadow:
+    0 0.5px 0 #b32d08,
+    0 2px 5px rgba(255, 79, 31, 0.22);
+}
+
+/* Matte charcoal hardware key */
+.hw-key-dark {
+  background: linear-gradient(180deg, #2a2926 0%, #191816 100%);
+  border: 1px solid #11100f;
+  color: #f7f4ed;
+  box-shadow:
+    0 2px 0 #0b0a09,
+    0 3px 6px rgba(24, 23, 21, 0.16);
+  transition:
+    transform 80ms ease,
+    box-shadow 80ms ease,
+    filter 120ms ease;
+}
+
+.hw-key-dark:hover {
+  filter: brightness(1.1);
+}
+
+.hw-key-dark:active {
+  transform: translateY(1.5px);
+  box-shadow: 0 0.5px 0 #0b0a09;
+}
+
+.font-mono-tech {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom slim studio fader */
+input[type="range"].studio-fader {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: #d5cec0;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"].studio-fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px;
+  height: 15px;
+  border-radius: 3px;
+  background: #1d1c19;
+  border: 1px solid #0e0d0c;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  cursor: ew-resize;
+}
+
+input[type="range"].studio-fader::-moz-range-thumb {
+  width: 11px;
+  height: 15px;
+  border-radius: 3px;
+  background: #1d1c19;
+  border: 1px solid #0e0d0c;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  cursor: ew-resize;
+}
+
+/* Subtle custom scrollbars for sequencer on small viewports */
+.thin-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+  background: #e5dfd2;
+  border-radius: 999px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: #bfb7a6;
+  border-radius: 999px;
+}
