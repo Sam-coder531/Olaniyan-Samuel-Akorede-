@@ -51,4 +51,17 @@ alter table public.airpods_reservations enable row level security;
 Env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY`.
 
+## Reverse engineering with REA
+
+[REA (Reverse Engineer Anything)](https://github.com/morluto/rea) is installed as a
+devDependency and registered as an MCP server in `.mcp.json` (207 tools).
+
+```bash
+npx rea-agents doctor      # readiness
+npx rea-agents --help      # 200+ commands
+bash scripts/rea-chatgpt.sh   # re-run the ChatGPT web-surface analysis
+```
+
+The ChatGPT pass and its findings live in [`docs/rea-chatgpt.md`](docs/rea-chatgpt.md).
+
 > Concept demo. Not affiliated with Apple Inc.
