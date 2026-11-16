@@ -148,6 +148,9 @@ function SoundRings({ progress }: { progress: MotionValue<number> }) {
 
 function Content({ progress }: { progress: MotionValue<number> }) {
   const buds = useRef<THREE.Group>(null);
+  const budA = useRef<THREE.Group>(null);
+  const budB = useRef<THREE.Group>(null);
+  const caseGroup = useRef<THREE.Group>(null);
 
   useFrame(() => {
     if (!buds.current) return;
@@ -159,6 +162,23 @@ function Content({ progress }: { progress: MotionValue<number> }) {
     buds.current.rotation.y = lerp(0, 0.26, out);
     buds.current.scale.setScalar(lerp(0.72, 0.95, out));
     buds.current.visible = out > 0.015;
+
+    // During the anatomy beat the shot becomes a SINGLE bud: the second bud
+    // fades out of the way and the survivor scales up so the parts read.
+    const anatomy = smooth(seg(p, 0.395, 0.435)) * (1 - smooth(seg(p, 0.545, 0.585)));
+    if (budB.current) {
+      budB.current.visible = anatomy < 0.35;
+      budB.current.scale.setScalar(1 - anatomy * 0.9);
+    }
+    if (budA.current) {
+      budA.current.position.x = lerp(-0.2, -0.02, anatomy);
+      budA.current.scale.setScalar(lerp(1, 1.55, anatomy));
+    }
+    // drop the case away so it doesn't crowd the anatomy shot
+    if (caseGroup.current) {
+      caseGroup.current.position.y = lerp(-0.05, -1.5, anatomy);
+      caseGroup.current.scale.setScalar(lerp(1, 0.85, anatomy));
+    }
   });
 
   return (
@@ -211,10 +231,13 @@ function Content({ progress }: { progress: MotionValue<number> }) {
       <pointLight position={[0, -2, 3]} intensity={6} color="#7dd3fc" distance={9} />
 
       {/* the case, always present */}
-      <AirPodsCase progress={progress} position={[0, -0.05, 0]} rotation={[0, 0, 0]} />
+      <group ref={caseGroup}>
+        <AirPodsCase progress={progress} position={[0, -0.05, 0]} rotation={[0, 0, 0]} />
+      </group>
 
       {/* the buds — group lifts out */}
       <group ref={buds} position={[0, 0.55, 0]}>
+        <group ref={budA}>
         <Float speed={1.1} rotationIntensity={0.22} floatIntensity={0.32}>
           <AirPod
             progress={progress}
@@ -224,6 +247,8 @@ function Content({ progress }: { progress: MotionValue<number> }) {
             finish={0}
           />
         </Float>
+        </group>
+        <group ref={budB}>
         <Float speed={0.9} rotationIntensity={0.18} floatIntensity={0.28}>
           <AirPod
             progress={progress}
@@ -234,6 +259,7 @@ function Content({ progress }: { progress: MotionValue<number> }) {
             finish={0}
           />
         </Float>
+        </group>
       </group>
 
       <SoundRings progress={progress} />
