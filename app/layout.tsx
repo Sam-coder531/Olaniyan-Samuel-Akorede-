@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://airpods.example.com"),
+  metadataBase: new URL("https://airpods-pro-film.vercel.app"),
   title: "AirPods Pro — Silence, engineered.",
   description:
     "An interactive product film. Scroll to take AirPods apart, silence the world, and put it back together again.",
