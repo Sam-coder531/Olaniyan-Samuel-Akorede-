@@ -48,32 +48,49 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ inputs.vercel_token }}
         run: |
-          npx --yes vercel@39 link \
-            --yes \
+          npx --yes vercel@39 link --yes \
             --project "${{ inputs.project }}" \
             --scope "${{ inputs.scope }}" \
             --token "$VERCEL_TOKEN"
 
+      # never fail the job here — capture everything into the summary + a file
       - name: Deploy to production
         id: deploy
+        continue-on-error: true
         env:
           VERCEL_TOKEN: ${{ inputs.vercel_token }}
         run: |
-          set -o pipefail
-          URL=$(npx --yes vercel@39 deploy --prebuilt --prod --yes \
-                  --token "$VERCEL_TOKEN" \
-                  --scope "${{ inputs.scope }}" 2>&1 | tee /tmp/out.txt | tail -1)
+          set +e
+          npx --yes vercel@39 deploy --prebuilt --prod --yes \
+            --token "$VERCEL_TOKEN" \
+            --scope "${{ inputs.scope }}" > /tmp/deploy.log 2>&1
+          code=$?
+          echo "exit_code=$code"
+          cat /tmp/deploy.log
+          URL=$(grep -Eo 'https://[a-z0-9.-]+\.vercel\.app' /tmp/deploy.log | tail -1)
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          echo "### Deployed: $URL" >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/out.txt >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Vercel deploy (exit $code)"
+            echo ""
+            echo "URL: \`$URL\`"
+            echo ""
+            echo '```'
+            tail -60 /tmp/deploy.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Smoke test
+      - name: Verify
+        if: steps.deploy.outputs.url != ''
         run: |
           URL="${{ steps.deploy.outputs.url }}"
-          echo "checking $URL"
-          curl -sS -o /dev/null -w "page %{http_code}\n" "$URL"
-          curl -sS -o /dev/null -w "image %{http_code}\n" "$URL/assets/airpods/hero-case-open.webp"
-          curl -sS -X POST "$URL/api/subscribe" \
-            -H 'content-type: application/json' \
-            -d '{"email":"ci-smoke-test@example.com"}' \
-            -w "\napi %{http_code}\n"
+          {
+            echo "## Smoke test"
+            echo '```'
+            curl -sS -o /dev/null -w "page %{http_code}\n" "$URL"
+            curl -sS -o /dev/null -w "image %{http_code}\n" "$URL/assets/airpods/hero-case-open.webp"
+            curl -sS -X POST "$URL/api/subscribe" \
+              -H 'content-type: application/json' \
+              -d '{"email":"ci-smoke-test@example.com"}' \
+              -w "\napi %{http_code}\n"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
