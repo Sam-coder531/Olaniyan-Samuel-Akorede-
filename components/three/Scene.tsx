@@ -154,10 +154,10 @@ function Content({ progress }: { progress: MotionValue<number> }) {
     const p = progress.get();
     // buds lift out of the case at the start and return at the end
     const out = smooth(seg(p, 0.03, 0.15)) * (1 - smooth(seg(p, 0.9, 0.99)));
-    buds.current.position.y = lerp(-0.24, 0.62, out);
-    buds.current.position.z = lerp(0, 0.1, out);
-    buds.current.rotation.y = lerp(0, 0.28, out);
-    buds.current.scale.setScalar(lerp(0.7, 0.95, out));
+    buds.current.position.y = lerp(-0.18, 1.0, out);
+    buds.current.position.z = lerp(0, 0.16, out);
+    buds.current.rotation.y = lerp(0, 0.26, out);
+    buds.current.scale.setScalar(lerp(0.72, 0.95, out));
     buds.current.visible = out > 0.015;
   });
 
