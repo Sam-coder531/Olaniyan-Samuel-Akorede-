@@ -93,28 +93,33 @@ export function AirPod({
     const back = ease(win(p, explode[1] - 0.03, explode[1]));
     const s = out * (1 - back);
 
-    if (nozzleRef.current) nozzleRef.current.position.x = lerp(0.16, 0.5, s);
+    if (nozzleRef.current) nozzleRef.current.position.x = lerp(0.15, 0.62, s);
     if (tipRef.current) {
-      tipRef.current.position.x = lerp(0.3, 0.86, s);
-      tipRef.current.rotation.z = lerp(0, 0.5, s);
+      tipRef.current.position.x = lerp(0.28, 1.18, s);
+      tipRef.current.rotation.z = lerp(0, 0.55, s);
     }
-    if (headRef.current) headRef.current.position.x = lerp(0, -0.12, s);
+    if (headRef.current) headRef.current.position.x = lerp(0, -0.3, s);
     if (chipRef.current) {
-      chipRef.current.position.y = lerp(-0.02, 0.3, s);
-      chipRef.current.position.x = lerp(0, 0.16, s);
-      chipRef.current.rotation.z = lerp(0, -0.6, s);
+      chipRef.current.position.y = lerp(-0.02, 0.42, s);
+      chipRef.current.position.x = lerp(0, 0.2, s);
+      chipRef.current.rotation.z = lerp(0, -0.7, s);
     }
-    if (stemRef.current) stemRef.current.position.y = lerp(-0.42, -0.86, s);
+    if (stemRef.current) {
+      stemRef.current.position.y = lerp(-0.46, -1.02, s);
+      stemRef.current.position.z = lerp(0, 0.1, s);
+    }
     if (batteryRef.current) {
-      batteryRef.current.position.y = lerp(-0.42, -0.52, s);
-      batteryRef.current.position.z = lerp(0, -0.34, s);
+      batteryRef.current.position.y = lerp(-0.46, -0.56, s);
+      batteryRef.current.position.z = lerp(0, -0.46, s);
     }
 
     // gentle life
     if (root.current) {
       const calm = 1 - s * 0.7;
       root.current.rotation.y =
-        rotation[1] + Math.sin(t * 0.34) * 0.11 * calm + s * 0.18;
+        rotation[1] * (1 - s) +
+        -0.28 * s +
+        Math.sin(t * 0.34) * 0.11 * calm;
       root.current.position.y =
         position[1] + Math.sin(t * 0.6) * 0.026 * calm;
     }
@@ -131,7 +136,7 @@ export function AirPod({
       {/* ---------------- acoustic head ---------------- */}
       <group ref={headRef}>
         <mesh scale={[1, 0.94, 0.9]} castShadow>
-          <sphereGeometry args={[0.22, 64, 64]} />
+          <sphereGeometry args={[0.195, 64, 64]} />
           <primitive object={materials.shell} attach="material" />
         </mesh>
 
@@ -215,7 +220,7 @@ export function AirPod({
       {/* ---------------- stem ---------------- */}
       <group ref={stemRef} position={[0, -0.42, 0]}>
         <RoundedBox
-          args={[0.112, 0.42, 0.098]}
+          args={[0.105, 0.46, 0.094]}
           radius={0.048}
           smoothness={5}
           castShadow
