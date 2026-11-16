@@ -47,6 +47,7 @@ export default function Studio() {
   const lastNoteRef = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const whisperTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstStroke = useRef(true);
 
   const [ready, setReady] = useState(false);
   const [intro, setIntro] = useState(true);
@@ -280,6 +281,9 @@ export default function Studio() {
 
       if (error) {
         say("the archive is unreachable — your ink stayed on this screen");
+      } else if (firstStroke.current) {
+        firstStroke.current = false;
+        say("your ink is in the archive — it stays forever");
       }
     },
     [ink, pluck, say],
