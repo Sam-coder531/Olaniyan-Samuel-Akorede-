@@ -20,7 +20,20 @@ function getMemoryBeats(): CommunityBeat[] {
   return globalStore.__akoredeMemoryBeats;
 }
 
-function getSupabaseConfig(): { url: string; key: string } | null {
+/**
+ * Resolves the Supabase connection settings.
+ *
+ * `serviceKey` is the privileged key used for writes and RPC counter bumps.
+ * `anonKey` is the public key, which is enough for reads because the table's
+ * Row Level Security policy grants `SELECT` to `anon`. We keep both so the
+ * crate still works (read-only) if the privileged key is missing or
+ * misconfigured, instead of silently falling back to session memory.
+ */
+function getSupabaseConfig(): {
+  url: string;
+  serviceKey: string | null;
+  anonKey: string | null;
+} | null {
   const url = (
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
@@ -28,9 +41,17 @@ function getSupabaseConfig(): { url: string; key: string } | null {
   )
     .trim()
     .replace(/\/+$/, "");
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-  if (!url || !key) return null;
-  return { url, key };
+  if (!url) return null;
+
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const anonKey = (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    ""
+  ).trim();
+
+  if (!serviceKey && !anonKey) return null;
+  return { url, serviceKey: serviceKey || null, anonKey: anonKey || null };
 }
 
 function supabaseHeaders(key: string, extra?: Record<string, string>) {
@@ -67,7 +88,7 @@ export async function listCommunityBeats(options: {
 
       const res = await fetch(`${cfg.url}/rest/v1/${TABLE}?${params.toString()}`, {
         method: "GET",
-        headers: supabaseHeaders(cfg.key),
+        headers: supabaseHeaders(cfg.serviceKey || cfg.anonKey!),
         cache: "no-store",
         signal: AbortSignal.timeout(5500),
       });
@@ -116,11 +137,13 @@ export async function publishCommunityBeat(input: {
   };
 
   const cfg = getSupabaseConfig();
-  if (cfg) {
+  if (cfg?.serviceKey) {
     try {
       const res = await fetch(`${cfg.url}/rest/v1/${TABLE}`, {
         method: "POST",
-        headers: supabaseHeaders(cfg.key, { Prefer: "return=representation" }),
+        headers: supabaseHeaders(cfg.serviceKey, {
+          Prefer: "return=representation",
+        }),
         body: JSON.stringify(payload),
         cache: "no-store",
         signal: AbortSignal.timeout(5500),
@@ -151,7 +174,7 @@ export async function incrementBeatCounter(
 ): Promise<{ value: number | null; storage: "supabase" | "memory" }> {
   const cfg = getSupabaseConfig();
 
-  if (cfg && UUID_RE.test(id)) {
+  if (cfg?.serviceKey && UUID_RE.test(id)) {
     const fn =
       field === "likes"
         ? "akorede_fm_increment_likes"
@@ -159,7 +182,7 @@ export async function incrementBeatCounter(
     try {
       const res = await fetch(`${cfg.url}/rest/v1/rpc/${fn}`, {
         method: "POST",
-        headers: supabaseHeaders(cfg.key),
+        headers: supabaseHeaders(cfg.serviceKey),
         body: JSON.stringify({ target_id: id }),
         cache: "no-store",
         signal: AbortSignal.timeout(5000),
