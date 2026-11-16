@@ -1,0 +1,71 @@
+name: verify-e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Deployment URL"
+        required: true
+        default: "https://airpods-pro-film.vercel.app"
+      log_branch:
+        description: "Branch to publish results to"
+        required: true
+        default: "verify-logs"
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Hit the live site
+        run: |
+          URL="${{ inputs.url }}"
+          {
+            echo "== page =="
+            curl -sS -o /tmp/page.html -w "HTTP %{http_code}  %{size_download} bytes\n" "$URL"
+            grep -o "<title>[^<]*</title>" /tmp/page.html || true
+            grep -o 'og:image" content="[^"]*"' /tmp/page.html || true
+
+            echo
+            echo "== images =="
+            for f in hero-case-open hero-buds-pair macro-detail exploded-ebud anc-waves transparency-mode spatial-audio case-closed-black colors-lineup charging-desk; do
+              printf '%-20s ' "$f"
+              curl -sS -o /dev/null -w "HTTP %{http_code}  %{size_download}B  %{content_type}\n" "$URL/assets/airpods/$f.webp"
+            done
+
+            echo
+            echo "== api: valid email =="
+            curl -sS -X POST "$URL/api/subscribe" \
+              -H 'content-type: application/json' \
+              -d '{"email":"e2e-proof@example.com"}' -w "\nHTTP %{http_code}\n"
+
+            echo
+            echo "== api: invalid email =="
+            curl -sS -X POST "$URL/api/subscribe" \
+              -H 'content-type: application/json' \
+              -d '{"email":"not-an-email"}' -w "\nHTTP %{http_code}\n"
+
+            echo
+            echo "== css/js bundle =="
+            grep -o '/_next/static/css/[^"]*' /tmp/page.html | head -1 | while read -r c; do
+              curl -sS -o /dev/null -w "css HTTP %{http_code} %{size_download}B\n" "$URL$c"
+            done
+          } > /tmp/verify.txt 2>&1
+          cat /tmp/verify.txt
+
+      - name: Publish results
+        run: |
+          mkdir -p .ci
+          cp /tmp/verify.txt .ci/verify.txt
+          git config user.name "verify-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -B "${{ inputs.log_branch }}" origin/"${{ inputs.log_branch }}" 2>/dev/null || git checkout -B "${{ inputs.log_branch }}"
+          git add -f .ci
+          git commit -m "ci: e2e $(date -u +%H:%M:%SZ)" || echo nothing
+          git push --force origin "${{ inputs.log_branch }}"
