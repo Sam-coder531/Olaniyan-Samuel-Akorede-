@@ -14,6 +14,7 @@
 | Readiness | `npx rea-agents doctor` | Node 22.22.3 ✅, Debian 12 ✅; Hopper/Ghidra/IDA/jadx ❌ (not needed for web work) |
 | Evidence import | `rea import-reference-source /tmp/rea/evidence/zaikun` | `hsm_be31e22d…`, 17 files, 90 160 bytes, git head `b10cee12` |
 | JS analysis | `rea analyze-javascript-application /tmp/rea/evidence/opencli/clis/chatgpt` | evidence `ev_b8a35e95…`, root sha256 `4ff04ad2…` |
+| JS analysis (2nd pass) | `rea analyze-javascript-application /tmp/rea/evidence/chatgptbox/src/services/apis` | evidence `ev_ec3389af…` — 15 files, 12 130 AST nodes, 178 findings |
 
 REA's own counts for the JavaScript analysis:
 
@@ -45,6 +46,7 @@ So: **the findings below describe ChatGPT's web protocol as reconstructed from c
 | [ChatGPTBox-dev/chatGPTBox](https://github.com/ChatGPTBox-dev/chatGPTBox) | 2026-11-13 | browser-extension client, error strings (arkose, custom API paths) |
 | [Zai-Kun/reverse-engineered-chatgpt](https://github.com/Zai-Kun/reverse-engineered-chatgpt) | 2024-04-07 | Python client, Sentinel + Arkose headers |
 | [acheong08/ChatGPT](https://github.com/acheong08/ChatGPT) | 2023-08-02 | historical v1 client (PUID, moderation) — **stale, for contrast only** |
+| [h053698/openai-sentinel-pow-teardown](https://github.com/h053698/openai-sentinel-pow-teardown) | 2026-08-25 | Sentinel PoW teardown — Python reimplementation of an **April 2026** build, self-declared *patched* |
 
 ---
 
@@ -92,6 +94,8 @@ Three separate gates show up in the evidence:
 2. **Arkose** — `arkose_token` is sent in the request body (`zaikun` line ~263/298, `acheong08` `get_arkose_token()`), gated per-model; `chatGPTBox` even ships user-facing strings for "Failed to get arkose token." in 10+ locales.
 3. **Device / account identity** — `PUID` cookie (`acheong08`, "You are a Plus user!"), plus the full browser fingerprint surface `opencli` replays: `cookie`, `origin`, `referer`, `accept-language`, `sec-fetch-dest/mode/site`, and a pinned Chrome `user-agent`.
 
+A second pass with REA recovered the **entire** gate — challenge, proof-of-work, and the exact headers — out of `chatGPTBox`'s current client. See **§3.6**.
+
 **Do not treat this section as a how-to.** These controls exist to enforce OpenAI's terms; circumventing them is a terms violation, and a client built on them breaks the next time the challenge rotates. Use the official API (§6).
 
 ### 3.5 Other endpoints visible in the evidence
@@ -104,6 +108,62 @@ Three separate gates show up in the evidence:
 | `patchUrl` (dynamic) | REA flagged this as a partially-resolved `fetch` target — value built at runtime |
 
 REA also emitted 5 **candidate** endpoint nodes from `opencli`'s command surface — `chatgpt/ask`, `chatgpt/send`, `chatgpt/new`, `chatgpt/deep-research-result`, `chatgpt/project-file-add` — labelled `interpretation: candidate`, `authority: static-relationship-inference`. Those are REA being honest about confidence: they are inferred names in the client, not confirmed URLs. **That confidence labelling is the single most useful thing REA does** — it separates "observed in the AST" from "guessed by inference".
+
+### 3.6 Second pass — the Sentinel gate, end to end
+
+Source: `chatgptbox/src/services/apis/chatgpt-web.mjs` (repo committed 2026-11-13), analysed by REA as evidence `ev_ec3389af…`. This is the current, *live* shape of the handshake.
+
+**Step 1 — pre-flight challenge.** Before a message is sent, four calls fire in parallel:
+
+```
+GET  /backend-api/models                              → available model slugs
+POST /backend-api/sentinel/chat-requirements          → { token, proofofwork: { seed, difficulty, required }, arkose: { required } }
+GET  /backend-api/accounts/check/v4-2023-04-27        → contains "shared_websocket"? then use the socket path
+     (arkose endpoint, user-configured URL)           → { token }
+```
+
+REA resolved `/sentinel/chat-requirements`, `/models`, `/accounts/check/...`, `/stop_conversation`, `/backend-api/files/{id}/download` and a `wss_url` WebSocket target as endpoint nodes in this pass.
+
+**Step 2 — proof of work.** If `proofofwork.required`, the client brute-forces a nonce:
+
+```
+config = [ screen, parseTime, 4294705152, nonce, userAgent,
+           "https://tcr9i.chat.openai.com/v2/…/api.js", "dpl=1440a687…",
+           "en", "en-US", 4294705152, "plugins−[object PluginArray]",
+           reactListeningKey, act ]
+
+for i in 0..200_000:
+    config[3] = i
+    base = base64(JSON.stringify(config))
+    if hex(sha3_512(seed + base))[:len(difficulty)] <= difficulty:
+        return "gAAAAAB" + base          # the Openai-Sentinel-Proof-Token
+```
+
+Three things stand out:
+
+- **It is SHA3-512 over `seed + base64(fingerprint)`**, compared as a *hex-prefix* against the server's `difficulty` string — a classic hashcash, with the difficulty sent per-request.
+- **The fingerprint is the point.** Screen resolution, `Date().toString()`, a fake `plugins` string, React's internal `_reactListening…` key and an event name are all baked into the hashed payload. The PoW is not just "burn CPU" — it binds the solution to a claimed browser environment.
+- **There is a hardcoded fallback** (`'gAAAAABwQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D' + base64('"seed"')`) when no nonce is found in 200k tries — the client would rather send *something* than fail.
+
+**Step 3 — the request.** Headers on `POST /backend-api/conversation`:
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <accessToken>` from `/api/auth/session` |
+| `Cookie` | the whole `chatgpt.com` cookie jar |
+| `Openai-Sentinel-Chat-Requirements-Token` | `requirements.token` from step 1 |
+| `Openai-Sentinel-Proof-Token` | the PoW result, when required |
+| `Openai-Sentinel-Arkose-Token` | Arkose token, only when `requirements.arkose.required` |
+| `Oai-Device-Id` | value of the `oai-did` cookie |
+| `Oai-Language` | `en-US` |
+
+Body: `action: "next"`, `conversation_id`, `messages[{id, author.role, content:{content_type:"text", parts:[…]}}]`, `conversation_mode:{kind:"primary_assistant"}`, `force_paragen`, `force_rate_limit`, `suggestions`, `model`, `parent_message_id`, `timezone_offset_min`, `history_and_training_disabled`, `websocket_request_id`.
+
+**Step 4 — transport.** Either the SSE stream, **or** (when `shared_websocket` is present) `registerWebsocket` → POST returns `websocket_request_id` → the answer arrives as `http.response.body` frames whose `body` is base64. There is also `POST /stop_conversation` to cancel.
+
+**The protocol moves.** The April-2026 teardown repo reconstructs the same algorithm with a *different* shape: an 18-element config, `gAAAAAC` prefix, and no Arkose URL baked in. Today's client uses 13 elements and `gAAAAAB`, with the Arkose script URL and a `dpl` fingerprint in the hashed payload. Same idea, new constants — which is exactly why a client built against this breaks within months. The teardown's own README confirms it: *"2026-04-30 이후 Sentinel PoW 코드/로직 변경으로 미작동"* (patched, no longer works).
+
+This section documents the mechanism for defensive/educational reading. It is not a working bypass, and nothing here should be used to evade an access control you don't own.
 
 ---
 
@@ -120,7 +180,7 @@ REA also emitted 5 **candidate** endpoint nodes from `opencli`'s command surface
 ## 5. What I did not verify
 
 - No packet was captured from OpenAI; **no header set was confirmed against live traffic**.
-- The Sentinel proof-of-work details (challenge format, difficulty, PoW algorithm) are not in this evidence set.
+- The Sentinel proof-of-work constants in §3.6 come from one third-party client (Nov 2026) and one self-declared-patched teardown (Apr 2026). **They were not confirmed against live traffic, and they rotate by design** — the two sources already disagree (`gAAAAAC`/18 fields vs `gAAAAAB`/13 fields).
 - `acheong08`'s v1 surface (moderation endpoint, `PUID` semantics) is from 2023 and is almost certainly retired.
 - Anything behind login that these clients don't exercise.
 

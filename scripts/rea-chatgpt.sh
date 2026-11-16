@@ -29,6 +29,7 @@ clone jackwener/OpenCLI                        opencli     # modern JS client (u
 clone ChatGPTBox-dev/chatGPTBox                chatgptbox  # extension client
 clone Zai-Kun/reverse-engineered-chatgpt       zaikun      # python, Sentinel + Arkose headers
 clone acheong08/ChatGPT                        acheong08   # historical v1 client (2023)
+clone h053698/openai-sentinel-pow-teardown    pow-teardown # Sentinel PoW teardown (Apr 2026 build, patched)
 
 echo "→ importing source reference"
 "${REA[@]}" import-reference-source "$EVIDENCE/zaikun" \
@@ -39,6 +40,11 @@ echo "→ static JavaScript analysis (this is the slow one)"
 "${REA[@]}" analyze-javascript-application "$EVIDENCE/opencli/clis/chatgpt" \
   --format json --analysis-timeout-ms 120000 \
   > "$OUT/opencli-chatgpt.json"
+
+echo "→ static JavaScript analysis, second pass (Sentinel/PoW client)"
+"${REA[@]}" analyze-javascript-application "$EVIDENCE/chatgptbox/src/services/apis" \
+  --format json --analysis-timeout-ms 180000 \
+  > "$OUT/chatgptbox-apis.json"
 
 echo "→ summarising"
 python3 - "$OUT/opencli-chatgpt.json" <<'PY'
