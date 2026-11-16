@@ -1,0 +1,79 @@
+name: tiktok-fetch
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "TikTok share URL"
+        required: true
+        default: "https://vm.tiktok.com/ZSpsPVxj9/"
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch metadata from TikTok resolver
+        run: |
+          set -x
+          curl -sS -L --max-time 60 \
+            -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)' \
+            "https://tikwm.com/api/?url=${{ inputs.url }}&hd=1" -o meta.json || true
+          curl -sS -L --max-time 60 \
+            -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)' \
+            "https://www.tikwm.com/api/?url=${{ inputs.url }}&hd=1" -o meta2.json || true
+          echo "=== meta.json ($(wc -c < meta.json 2>/dev/null || echo 0) bytes) ==="
+          head -c 4000 meta.json || true
+          echo
+          echo "=== meta2.json ($(wc -c < meta2.json 2>/dev/null || echo 0) bytes) ==="
+          head -c 4000 meta2.json || true
+
+      - name: Download video + audio
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, subprocess
+
+          data = None
+          for f in ("meta.json", "meta2.json"):
+              try:
+                  j = json.load(open(f))
+                  if j.get("data"):
+                      data = j["data"]
+                      break
+              except Exception:
+                  pass
+          if not data:
+              print("NO DATA PARSED")
+              raise SystemExit(0)
+
+          print("DESC:", data.get("title"))
+          print("AUTHOR:", data.get("author", {}).get("unique_id"))
+          print("DURATION:", data.get("duration"))
+          print("PLAY:", data.get("play"))
+          os.makedirs("out", exist_ok=True)
+          open("out/metadata.json", "w").write(json.dumps(data, indent=2))
+
+          def grab(url, dest):
+              if not url:
+                  return
+              if url.startswith("/"):
+                  url = "https://tikwm.com" + url
+              req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+              with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as fh:
+                  fh.write(r.read())
+              print("saved", dest, os.path.getsize(dest), "bytes")
+
+          grab(data.get("hdplay") or data.get("play"), "out/video.mp4")
+          # extract audio track
+          subprocess.run(["ffmpeg", "-y", "-i", "out/video.mp4", "-vn", "-acodec", "libmp3lame",
+                          "-q:a", "2", "out/audio.mp3"], check=False)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tiktok-download
+          path: |
+            meta.json
+            meta2.json
+            out/
+          if-no-files-found: warn
