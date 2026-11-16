@@ -7,284 +7,244 @@ import { RoundedBox } from "@react-three/drei";
 import type { MotionValue } from "motion/react";
 
 /* ------------------------------------------------------------------ */
-/*  Helpers                                                           */
+/*  AirPod Pro — modelled in local space:                              */
+/*    +X = into the ear (nozzle + tip)                                 */
+/*    -Y = down the stem                                               */
+/*  Head radius 0.22 so two buds roughly fill a 1.05-wide case.        */
 /* ------------------------------------------------------------------ */
 
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-/** progress → 0..1 window */
 const win = (p: number, a: number, b: number) => clamp01((p - a) / (b - a));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
-const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
-export const BUD_FINISHES = [
-  { name: "Pearl", color: "#f4f4f2", stem: "#ececeb", tip: "#c9cbcd" },
-  { name: "Midnight", color: "#1a1a1f", stem: "#15151a", tip: "#2b2b31" },
-  { name: "Titanium", color: "#8f9095", stem: "#84858a", tip: "#5f6065" },
-  { name: "Sand", color: "#d9c9b4", stem: "#cbbb a7".replace(" ", ""), tip: "#b09a80" },
+export type Finish = { body: string; metal: string; roughness: number };
+
+export const FINISHES: Finish[] = [
+  { body: "#f2f2f0", metal: "#cfd0d2", roughness: 0.26 },
+  { body: "#1b1b20", metal: "#2a2a30", roughness: 0.3 },
+  { body: "#8d8e93", metal: "#6c6d72", roughness: 0.34 },
+  { body: "#d8c8b2", metal: "#b39a7c", roughness: 0.3 },
 ];
-
-/* ------------------------------------------------------------------ */
-/*  One AirPod — every part is its own group so it can explode         */
-/* ------------------------------------------------------------------ */
-
-type BudProps = {
-  progress: MotionValue<number>;
-  side?: "L" | "R";
-  /** world position of the whole bud */
-  position?: [number, number, number];
-  rotation?: [number, number, number];
-  scale?: number;
-  /** separate window for the explode animation (0..1 page progress) */
-  explode?: [number, number];
-  /** which finish is showing (0..3), driven by page progress */
-  finishIndex?: MotionValue<number>;
-  showLabels?: boolean;
-};
 
 export function AirPod({
   progress,
   position = [0, 0, 0],
   rotation = [0, 0, 0],
   scale = 1,
-  explode = [0.38, 0.55],
-  showLabels = false,
-}: BudProps) {
+  explode = [0.4, 0.56],
+  finish = 0,
+}: {
+  progress: MotionValue<number>;
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: number;
+  explode?: [number, number];
+  finish?: number;
+}) {
   const root = useRef<THREE.Group>(null);
 
-  // individual part refs
-  const tip = useRef<THREE.Group>(null);
-  const mesh = useRef<THREE.Group>(null);
-  const chamber = useRef<THREE.Group>(null);
-  const chip = useRef<THREE.Group>(null);
-  const battery = useRef<THREE.Group>(null);
-  const flex = useRef<THREE.Group>(null);
-  const shell = useRef<THREE.Group>(null);
+  // separable parts
+  const tipRef = useRef<THREE.Group>(null);
+  const nozzleRef = useRef<THREE.Group>(null);
+  const headRef = useRef<THREE.Group>(null);
+  const chipRef = useRef<THREE.Group>(null);
+  const stemRef = useRef<THREE.Group>(null);
+  const batteryRef = useRef<THREE.Group>(null);
 
-  const bodyMat = useRef<THREE.MeshPhysicalMaterial>(null);
-  const stemMat = useRef<THREE.MeshPhysicalMaterial>(null);
-  const tipMat = useRef<THREE.MeshStandardMaterial>(null);
-
-  // finish colours we lerp between
-  const colors = useMemo(
-    () => ({
-      body: new THREE.Color("#f4f4f2"),
-      stem: new THREE.Color("#ececeb"),
-      tip: new THREE.Color("#c9cbcd"),
-      targetBody: new THREE.Color("#f4f4f2"),
-      targetStem: new THREE.Color("#ececeb"),
-      targetTip: new THREE.Color("#c9cbcd"),
-    }),
-    []
-  );
+  const materials = useMemo(() => {
+    const shell = new THREE.MeshPhysicalMaterial({
+      color: "#f2f2f0",
+      roughness: 0.26,
+      metalness: 0,
+      clearcoat: 1,
+      clearcoatRoughness: 0.07,
+      envMapIntensity: 1.2,
+    });
+    const tip = new THREE.MeshStandardMaterial({
+      color: "#d9dadd",
+      roughness: 0.78,
+      metalness: 0,
+    });
+    const mesh = new THREE.MeshStandardMaterial({
+      color: "#55565c",
+      roughness: 0.85,
+      metalness: 0.3,
+    });
+    const chrome = new THREE.MeshStandardMaterial({
+      color: "#b9bcc2",
+      roughness: 0.18,
+      metalness: 1,
+    });
+    const dark = new THREE.MeshStandardMaterial({
+      color: "#1d1d21",
+      roughness: 0.6,
+      metalness: 0.2,
+    });
+    return { shell, tip, mesh, chrome, dark };
+  }, []);
 
   useFrame(({ clock }) => {
     const p = progress.get();
     const t = clock.getElapsedTime();
 
-    /* ---------------- explode ---------------- */
-    const e = ease(win(p, explode[0], explode[0] + (explode[1] - explode[0]) * 0.62));
-    const reassemble = ease(win(p, explode[1] - 0.035, explode[1]));
-    const spread = e * (1 - reassemble);
+    // explode out, then snap back together
+    const out = ease(win(p, explode[0], explode[0] + (explode[1] - explode[0]) * 0.6));
+    const back = ease(win(p, explode[1] - 0.03, explode[1]));
+    const s = out * (1 - back);
 
-    if (tip.current) {
-      tip.current.position.x = lerp(0.63, 1.62, spread);
-      tip.current.rotation.z = lerp(0, 0.45, spread);
+    if (nozzleRef.current) nozzleRef.current.position.x = lerp(0.16, 0.5, s);
+    if (tipRef.current) {
+      tipRef.current.position.x = lerp(0.3, 0.86, s);
+      tipRef.current.rotation.z = lerp(0, 0.5, s);
     }
-    if (mesh.current) mesh.current.position.x = lerp(0.46, 1.14, spread);
-    if (chamber.current) chamber.current.position.x = lerp(0.3, 0.72, spread);
-    if (chip.current) {
-      chip.current.position.x = lerp(0.05, 0.3, spread);
-      chip.current.position.y = lerp(-0.02, 0.16, spread);
-      chip.current.rotation.z = lerp(0, -0.5, spread);
+    if (headRef.current) headRef.current.position.x = lerp(0, -0.12, s);
+    if (chipRef.current) {
+      chipRef.current.position.y = lerp(-0.02, 0.3, s);
+      chipRef.current.position.x = lerp(0, 0.16, s);
+      chipRef.current.rotation.z = lerp(0, -0.6, s);
     }
-    if (battery.current) {
-      battery.current.position.y = lerp(-0.62, -0.98, spread);
-      battery.current.position.z = lerp(0, 0.22, spread);
-    }
-    if (flex.current) {
-      flex.current.position.y = lerp(-0.42, -0.2, spread);
-      flex.current.position.z = lerp(0, -0.34, spread);
-      flex.current.rotation.x = lerp(0, 0.7, spread);
-    }
-    if (shell.current) {
-      shell.current.position.z = lerp(0, -0.9, spread);
-      shell.current.rotation.x = lerp(0, -0.35, spread);
+    if (stemRef.current) stemRef.current.position.y = lerp(-0.42, -0.86, s);
+    if (batteryRef.current) {
+      batteryRef.current.position.y = lerp(-0.42, -0.52, s);
+      batteryRef.current.position.z = lerp(0, -0.34, s);
     }
 
-    /* ---------------- idle float + rotate ---------------- */
+    // gentle life
     if (root.current) {
-      const idle = 1 - spread * 0.65;
-      root.current.position.y = position[1] + Math.sin(t * 0.55) * 0.045 * idle;
+      const calm = 1 - s * 0.7;
       root.current.rotation.y =
-        rotation[1] + Math.sin(t * 0.32) * 0.1 * idle + spread * 0.25;
-      root.current.rotation.z = rotation[2] + Math.sin(t * 0.41) * 0.02 * idle;
+        rotation[1] + Math.sin(t * 0.34) * 0.11 * calm + s * 0.18;
+      root.current.position.y =
+        position[1] + Math.sin(t * 0.6) * 0.026 * calm;
     }
 
-    /* ---------------- finish morph ---------------- */
-    const fi = clamp01(progress.get() * 0);
-    void fi;
-    if (bodyMat.current || stemMat.current) {
-      colors.body.lerp(colors.targetBody, 0.06);
-      colors.stem.lerp(colors.targetStem, 0.06);
-      colors.tip.lerp(colors.targetTip, 0.06);
-      if (bodyMat.current) bodyMat.current.color.copy(colors.body);
-      if (stemMat.current) stemMat.current.color.copy(colors.stem);
-      if (tipMat.current) tipMat.current.color.copy(colors.tip);
-    }
+    // finish crossfade
+    const f = FINISHES[Math.max(0, Math.min(FINISHES.length - 1, Math.round(finish)))];
+    materials.shell.color.lerp(new THREE.Color(f.body), 0.08);
+    materials.chrome.color.lerp(new THREE.Color(f.metal), 0.08);
+    materials.shell.roughness = lerp(materials.shell.roughness, f.roughness, 0.08);
   });
-
-  const shellM = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: "#f4f4f2",
-        roughness: 0.28,
-        metalness: 0,
-        clearcoat: 1,
-        clearcoatRoughness: 0.08,
-        envMapIntensity: 1.15,
-      }),
-    []
-  );
 
   return (
     <group ref={root} position={position} rotation={rotation} scale={scale}>
-      {/* ============ main acoustic housing ============ */}
-      <group ref={chamber}>
-        <mesh castShadow>
-          <sphereGeometry args={[0.5, 96, 96]} />
-          <primitive object={shellM} ref={bodyMat} attach="material" />
+      {/* ---------------- acoustic head ---------------- */}
+      <group ref={headRef}>
+        <mesh scale={[1, 0.94, 0.9]} castShadow>
+          <sphereGeometry args={[0.22, 64, 64]} />
+          <primitive object={materials.shell} attach="material" />
         </mesh>
-        {/* seam line where the shell joins */}
-        <mesh position={[0.16, 0.12, 0]} rotation={[0, 0, 0.5]}>
-          <torusGeometry args={[0.36, 0.004, 8, 72, Math.PI * 1.1]} />
-          <meshStandardMaterial color="#d3d3d5" roughness={0.6} />
+
+        {/* mic vent */}
+        <mesh position={[-0.13, 0.06, 0.16]} rotation={[0.35, -0.4, 0]}>
+          <capsuleGeometry args={[0.018, 0.05, 4, 10]} />
+          <primitive object={materials.dark} attach="material" />
         </mesh>
-        {/* mic vent on the body */}
-        <mesh position={[-0.34, 0.16, 0.33]} rotation={[0.3, -0.5, 0]}>
-          <capsuleGeometry args={[0.035, 0.075, 6, 14]} />
-          <meshStandardMaterial color="#3a3a3e" roughness={0.85} />
+
+        {/* in-ear sensor */}
+        <mesh position={[-0.05, -0.09, 0.18]}>
+          <circleGeometry args={[0.024, 20]} />
+          <primitive object={materials.dark} attach="material" />
         </mesh>
-        {/* infrared sensor */}
-        <mesh position={[-0.1, -0.18, 0.42]}>
-          <circleGeometry args={[0.045, 24]} />
-          <meshStandardMaterial color="#16161a" roughness={0.35} metalness={0.4} />
+
+        {/* speaker mesh where nozzle meets head */}
+        <mesh position={[0.19, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+          <circleGeometry args={[0.105, 40]} />
+          <primitive object={materials.mesh} attach="material" />
         </mesh>
       </group>
 
-      {/* ============ speaker mesh dome ============ */}
-      <group ref={mesh} position={[0.46, 0, 0]}>
-        <mesh rotation={[0, 0, -Math.PI / 2]}>
-          <cylinderGeometry args={[0.235, 0.255, 0.1, 64]} />
-          <meshPhysicalMaterial
-            color="#e8e8ea"
-            roughness={0.45}
-            clearcoat={0.6}
-          />
-        </mesh>
-        <mesh position={[0.056, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
-          <circleGeometry args={[0.2, 48]} />
-          <meshStandardMaterial
-            color="#4a4a50"
-            roughness={0.95}
-            metalness={0.25}
-          />
+      {/* ---------------- nozzle ---------------- */}
+      <group ref={nozzleRef} position={[0.16, 0, 0]}>
+        <mesh rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.098, 0.115, 0.14, 48]} />
+          <primitive object={materials.shell} attach="material" />
         </mesh>
       </group>
 
-      {/* ============ silicone ear tip ============ */}
-      <group ref={tip} position={[0.63, 0, 0]}>
-        <mesh rotation={[0, 0, -Math.PI / 2]}>
+      {/* ---------------- silicone tip ---------------- */}
+      <group ref={tipRef} position={[0.3, 0, 0]}>
+        <mesh rotation={[0, 0, Math.PI / 2]}>
           <latheGeometry
             args={[
               [
-                new THREE.Vector2(0.15, 0),
-                new THREE.Vector2(0.26, 0.03),
-                new THREE.Vector2(0.3, 0.1),
-                new THREE.Vector2(0.29, 0.19),
-                new THREE.Vector2(0.24, 0.26),
-                new THREE.Vector2(0.19, 0.3),
-                new THREE.Vector2(0.17, 0.31),
+                new THREE.Vector2(0.0, 0),
+                new THREE.Vector2(0.07, 0),
+                new THREE.Vector2(0.115, 0.02),
+                new THREE.Vector2(0.135, 0.055),
+                new THREE.Vector2(0.132, 0.09),
+                new THREE.Vector2(0.112, 0.115),
+                new THREE.Vector2(0.085, 0.13),
+                new THREE.Vector2(0.072, 0.132),
               ],
               48,
             ]}
           />
-          <meshStandardMaterial ref={tipMat} color="#c9cbcd" roughness={0.72} />
+          <primitive object={materials.tip} attach="material" />
         </mesh>
-        {/* opening */}
-        <mesh position={[0.31, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
-          <circleGeometry args={[0.13, 40]} />
-          <meshStandardMaterial color="#2a2a2e" roughness={1} />
+        {/* ear canal opening */}
+        <mesh position={[0.134, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+          <circleGeometry args={[0.055, 32]} />
+          <primitive object={materials.dark} attach="material" />
         </mesh>
       </group>
 
-      {/* ============ H3 chip ============ */}
-      <group ref={chip} position={[0.05, -0.02, 0]}>
-        <RoundedBox args={[0.16, 0.16, 0.025]} radius={0.008} smoothness={3}>
-          <meshStandardMaterial color="#1c2a1f" roughness={0.5} metalness={0.5} />
+      {/* ---------------- H3 chip ---------------- */}
+      <group ref={chipRef} position={[0, -0.02, 0]}>
+        <RoundedBox args={[0.13, 0.13, 0.018]} radius={0.006} smoothness={3}>
+          <meshStandardMaterial color="#1b2a20" roughness={0.55} metalness={0.5} />
         </RoundedBox>
         <RoundedBox
-          args={[0.075, 0.075, 0.014]}
-          radius={0.004}
+          args={[0.062, 0.062, 0.012]}
+          radius={0.003}
           smoothness={2}
-          position={[0, 0, 0.02]}
+          position={[0, 0, 0.016]}
         >
-          <meshStandardMaterial
-            color="#2b2b30"
-            roughness={0.35}
-            metalness={0.85}
-          />
+          <meshStandardMaterial color="#2c2c31" roughness={0.3} metalness={0.9} />
+        </RoundedBox>
+        <RoundedBox
+          args={[0.1, 0.1, 0.008]}
+          radius={0.002}
+          smoothness={2}
+          position={[0, 0, -0.014]}
+        >
+          <meshStandardMaterial color="#b08432" roughness={0.35} metalness={0.95} />
         </RoundedBox>
       </group>
 
-      {/* ============ stem ============ */}
-      <group ref={shell} position={[0, -0.62, 0]}>
+      {/* ---------------- stem ---------------- */}
+      <group ref={stemRef} position={[0, -0.42, 0]}>
         <RoundedBox
-          args={[0.175, 0.68, 0.15]}
-          radius={0.072}
+          args={[0.112, 0.42, 0.098]}
+          radius={0.048}
           smoothness={5}
           castShadow
         >
-          <primitive object={shellM} ref={stemMat} attach="material" />
+          <primitive object={materials.shell} attach="material" />
         </RoundedBox>
-        {/* force sensor indent */}
-        <mesh position={[0.089, 0.02, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <capsuleGeometry args={[0.03, 0.1, 6, 16]} />
-          <meshStandardMaterial color="#dedee0" roughness={0.55} />
+
+        {/* force sensor touch pad */}
+        <mesh position={[0.057, 0.02, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <capsuleGeometry args={[0.022, 0.07, 4, 12]} />
+          <meshStandardMaterial color="#dcdde0" roughness={0.5} />
         </mesh>
-        {/* bottom mic */}
-        <mesh position={[0, -0.335, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[0.045, 24]} />
-          <meshStandardMaterial color="#232327" roughness={0.8} />
+
+        {/* bottom antenna / mic cap */}
+        <mesh position={[0, -0.212, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.03, 24]} />
+          <primitive object={materials.chrome} attach="material" />
         </mesh>
-        {/* charging contacts */}
-        <mesh position={[0, -0.3, 0.062]}>
-          <circleGeometry args={[0.022, 20]} />
-          <meshStandardMaterial color="#b08d4a" metalness={1} roughness={0.25} />
+        <mesh position={[0, -0.19, 0.042]}>
+          <circleGeometry args={[0.014, 20]} />
+          <primitive object={materials.dark} attach="material" />
         </mesh>
       </group>
 
-      {/* ============ battery ============ */}
-      <group ref={battery} position={[0, -0.62, 0]}>
+      {/* ---------------- battery ---------------- */}
+      <group ref={batteryRef} position={[0, -0.42, 0]}>
         <mesh>
-          <cylinderGeometry args={[0.062, 0.062, 0.24, 32]} />
-          <meshStandardMaterial
-            color="#9aa0a6"
-            metalness={0.95}
-            roughness={0.25}
-          />
-        </mesh>
-      </group>
-
-      {/* ============ flex cable ============ */}
-      <group ref={flex} position={[0, -0.42, 0]}>
-        <mesh rotation={[0, 0, 0.1]}>
-          <boxGeometry args={[0.028, 0.42, 0.006]} />
-          <meshStandardMaterial color="#c9761f" roughness={0.7} />
-        </mesh>
-        <mesh position={[0, 0.21, 0]}>
-          <boxGeometry args={[0.05, 0.05, 0.008]} />
-          <meshStandardMaterial color="#d8b24a" metalness={0.8} roughness={0.4} />
+          <cylinderGeometry args={[0.042, 0.042, 0.19, 28]} />
+          <meshStandardMaterial color="#9ba1a8" metalness={0.95} roughness={0.22} />
         </mesh>
       </group>
     </group>
