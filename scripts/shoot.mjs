@@ -76,6 +76,13 @@ const gl = await page.evaluate(() => {
   };
 });
 say("WEBGL " + JSON.stringify(gl));
+
+// build stamp so it's obvious which code produced these frames
+const stamp = await page.evaluate(async () => {
+  const r = await fetch("/api/stamp").then((x) => x.json()).catch(() => null);
+  return r;
+});
+say("BUILD " + JSON.stringify(stamp));
 say("TITLE " + (await page.title()));
 
 await fs.mkdir(OUT, { recursive: true });
