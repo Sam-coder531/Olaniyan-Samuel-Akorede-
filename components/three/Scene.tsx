@@ -25,26 +25,37 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 type Stop = { at: number; pos: [number, number, number]; look: [number, number, number] };
 
+/**
+ * A stop is where the camera stands and where it looks.
+ * Framing trick: the product stays at world origin, so its screen position is
+ * driven by (lookX - productX). A NEGATIVE lookX pushes the product to the
+ * right of frame (room for left-hand copy) and vice versa.
+ */
+const S = (
+  at: number,
+  cam: [number, number, number],
+  look: [number, number, number]
+): Stop => ({ at, pos: cam, look });
+
 const STOPS: Stop[] = [
-  //        progress      x      y     z                 x     y    z
-  // opening: product sits right of frame, text on the left
-  { at: 0.0, pos: [0.75, 0.45, 4.9], look: [0.75, 0.28, 0] },
-  { at: 0.14, pos: [0.8, 0.5, 4.3], look: [0.8, 0.42, 0] },
-  // product swings to the left so the right-hand copy has room
-  { at: 0.26, pos: [-0.95, 0.55, 3.9], look: [-0.95, 0.4, 0] },
-  // centre for the "look closer" beat
-  { at: 0.36, pos: [0, 0.45, 3.7], look: [0, 0.3, 0] },
-  // exploded: pushed right, wide enough to see the parts fan out
-  { at: 0.46, pos: [0.85, 0.35, 4.4], look: [0.85, 0.2, 0] },
-  { at: 0.56, pos: [1.0, 0.3, 4.2], look: [1.0, 0.15, 0] },
-  // ANC: left, rings visible
-  { at: 0.66, pos: [-0.9, 0.5, 4.5], look: [-0.9, 0.3, 0] },
-  // transparency: right
-  { at: 0.76, pos: [0.95, 0.5, 4.1], look: [0.95, 0.3, 0] },
-  // spatial: centre-ish, orbiting
-  { at: 0.86, pos: [-0.4, 0.35, 4.0], look: [-0.4, 0.25, 0] },
-  // finale: dead centre, lid closed
-  { at: 1.0, pos: [0, 0.4, 4.6], look: [0, 0.25, 0] },
+  // hero — product right, headline left
+  S(0.0, [0, 0.5, 4.8], [-0.52, 0.22, 0]),
+  S(0.14, [0, 0.52, 4.4], [-0.56, 0.36, 0]),
+  // anatomy — copy on the right, so product goes left
+  S(0.26, [0, 0.62, 4.15], [0.56, 0.42, 0]),
+  // "look closer" — dead centre
+  S(0.36, [0, 0.46, 4.0], [0, 0.3, 0]),
+  // explode — parts fan out to the right, copy stays left
+  S(0.46, [0.1, 0.36, 4.65], [-0.42, 0.16, 0]),
+  S(0.56, [0.15, 0.3, 4.55], [-0.44, 0.12, 0]),
+  // ANC — copy left, rings around the product right of centre
+  S(0.66, [-0.05, 0.52, 4.7], [-0.5, 0.26, 0]),
+  // transparency — copy right
+  S(0.76, [0.05, 0.5, 4.4], [0.55, 0.3, 0]),
+  // spatial — centred
+  S(0.86, [0, 0.4, 4.3], [0, 0.26, 0]),
+  // finale — centred, settled
+  S(1.0, [0, 0.42, 4.8], [0, 0.24, 0]),
 ];
 
 function cameraAt(p: number) {
@@ -246,7 +257,7 @@ export default function Scene({ progress }: { progress: MotionValue<number> }) {
       shadows
       dpr={[1, 1.8]}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-      camera={{ position: [0.75, 0.45, 4.9], fov: 34, near: 0.1, far: 80 }}
+      camera={{ position: [0, 0.5, 4.8], fov: 34, near: 0.1, far: 80 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.15;
